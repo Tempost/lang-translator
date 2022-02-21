@@ -62,20 +62,21 @@ impl Iterator for Tokenize {
     type Item = Result<Tokens>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let character: char;
+        unimplemented!("Work on this (:");
+        // let character: char;
 
-        // Loop through, ignoring whitespace, and create tokens
-        loop {
-            match self.characters.next() {
-                Some(c) if c.is_ascii_whitespace() => continue,
-                Some(c) => {
-                   character = c;
-                   println!("{}", character);
-                   break;
-                }
-                None => return None, 
-            }
-        }
-        None
+        // // Loop through, ignoring whitespace, and create tokens
+        // loop {
+        //     match self.characters.next() {
+        //         Some(c) if c.is_ascii_whitespace() => continue,
+        //         Some(c) => {
+        //            character = c;
+        //            println!("{}", character);
+        //            break;
+        //         }
+        //         None => return None, 
+        //     }
+        // }
+        // None
     }
 }

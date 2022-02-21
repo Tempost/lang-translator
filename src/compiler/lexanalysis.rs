@@ -13,6 +13,7 @@ pub enum Tokens {
     Seperator(Seperators)
 }
 
+// Required for later? to futher identify a symbol
 #[derive(Debug, Clone, PartialEq)]
 pub enum Keywords {
     Const(String),
@@ -24,12 +25,14 @@ pub enum Literals {
     Int(i32)
 }
 
+// Required for later? to futher identify a symbol
 #[derive(Debug, Clone, PartialEq)]
 pub enum Operators {
     Mop(String),
     AddOp(String),
 }
 
+// Required for later? to futher identify a symbol
 #[derive(Debug, Clone, PartialEq)]
 pub enum Seperators {
     LB(String),

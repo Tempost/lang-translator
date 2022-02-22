@@ -2,6 +2,9 @@ use std::fs;
 use std::io;
 use std::iter::Peekable;
 use std::vec::IntoIter;
+
+use crate::compiler::fsa::Fsa;
+
 type Result<T> = std::result::Result<T, String>;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -42,7 +45,7 @@ pub enum Seperators {
 }
 
 pub struct Tokenize {
-    characters: Peekable<IntoIter<char>>
+    pub characters: Peekable<IntoIter<char>>
 }
 
 impl Tokenize {
@@ -65,21 +68,33 @@ impl Iterator for Tokenize {
     type Item = Result<Tokens>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        unimplemented!("Work on this (:");
-        // let character: char;
+        let table =  Fsa::new([
+            [1, 3, 0], // State 0
+            [1, 1, 2], // State 1
+            [0, 0, 0], // State 2 <Identifier>
+            [0, 3, 4], // State 3
+            [0, 0, 0]  // State 4 <Literal>
+        ],
+        [
+            String::from("<Identifier>"),
+            String::from("<Literal>"),
+            String::from("<PlaceHolder>")
+        ]);
 
-        // // Loop through, ignoring whitespace, and create tokens
-        // loop {
-        //     match self.characters.next() {
-        //         Some(c) if c.is_ascii_whitespace() => continue,
-        //         Some(c) => {
-        //            character = c;
-        //            println!("{}", character);
-        //            break;
-        //         }
-        //         None => return None, 
-        //     }
-        // }
-        // None
+        let character: char;
+
+        // Loop through, ignoring whitespace, and create tokens
+        loop {
+            match self.characters.next() {
+                Some(c) if c.is_ascii_whitespace() => continue,
+                Some(c) => {
+                   character = c;
+                   println!("{}", character);
+                   break;
+                }
+                None => return None, 
+            }
+        }
+        None
     }
 }

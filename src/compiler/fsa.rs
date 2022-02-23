@@ -1,5 +1,14 @@
-type Validtable = [ [i16; 3]; 5];
+type Validtable = [ [States; 3]; 3];
 type Symbols    = [String; 3];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum States {
+    Start,
+    Letter,
+    Digit,
+    LetterDigit,
+    Finish
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Fsa {
@@ -23,11 +32,9 @@ mod tests {
     #[test]
     fn new_just_works() {
         let table =  Fsa::new([
-            [1, 1, 1],
-            [1, 1, 1],
-            [1, 1, 1],
-            [1, 1, 1],
-            [1, 1, 1]
+            [States::Letter, States::Letter, States::Letter],
+            [States::Letter, States::Letter, States::Letter],
+            [States::Letter, States::Letter, States::Letter],
         ],
         [
             String::from("var"),
@@ -35,7 +42,12 @@ mod tests {
             String::from("double")
         ]);
 
-        let valid_table: Validtable = [[1,1,1],[1,1,1],[1,1,1], [1, 1, 1], [1, 1, 1]];
+        let valid_table: Validtable = [
+            [States::Letter, States::Letter, States::Letter],
+            [States::Letter, States::Letter, States::Letter],
+            [States::Letter, States::Letter, States::Letter],
+        ];
+
         let valid_symbols: Symbols = [String::from("var"), String::from("int"), String::from("double")];
 
         assert_eq!(table.state_table, valid_table);
@@ -46,11 +58,9 @@ mod tests {
     fn state_loop() {
         // always passing test
         let table =  Fsa::new([
-            [1, 3, 0], // State 0
-            [1, 1, 2], // State 1
-            [0, 0, 0], // State 2 <Identifier>
-            [0, 3, 4], // State 3
-            [0, 0, 0]  // State 4 <Literal>
+            [States::Letter, States::Digit, States::Start], // State 0
+            [States::Letter, States::Letter, States::Finish], // State 1
+            [States::Start, States::Digit, States::Finish], // State 2
         ],
         [
             String::from("<Identifier>"),
@@ -58,10 +68,13 @@ mod tests {
             String::from("<PlaceHolder>")
         ]);
 
+        let mut curr = 0;
         for state in table.state_table {
+            print!("current index: {} == ", curr);
             for to_state in state {
-                print!("{},", to_state);
+                print!("{:?},", to_state);
             }
+            curr += 1;
             println!("\n");
         }
     }

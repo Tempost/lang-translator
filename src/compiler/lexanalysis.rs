@@ -70,13 +70,15 @@ impl Iterator for Tokenize {
     type Item = Result<Tokens>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        // NOTE: what if instead of [0, 1, 2, 3, 4] i used my States enum?
+        // TODO: Move this out of the function
         let table =  Fsa::new([
         //   L  D  b
-            [1, 3, 0], // State 0
+            [1, 3, 0], // State 0 -> Start
             [1, 1, 2], // State 1
-            [0, 0, 0], // State 2 <Identifier>
+            [0, 0, 0], // State 2 <Identifier> -> Finish
             [0, 3, 4], // State 3
-            [0, 0, 0]  // State 4 <Literal>
+            [0, 0, 0]  // State 4 <Literal> -> Finish
         ],
         [
             String::from("<Identifier>"),
@@ -84,47 +86,44 @@ impl Iterator for Tokenize {
             String::from("<PlaceHolder>")
         ]);
 
-        let character: char;
+        let mut curr_state = States::Start;
+        let mut token_string = String::from("");
 
-        // Loop through, ignoring whitespace, better way to do this?
-        loop {
-            match self.characters.next() {
-                Some(c) if c.is_ascii_whitespace() => continue,
-                Some(c) => {
-                   character = c;
-                   break; // exit loop 
-                }
-                None => return None,  // nothing found
-            }
-            
-        }
-
-        // do stuff with character, append to string -> check next to see if token ends
+        // do stuff with character, append to token_string -> check next to see if token ends
         // once we have a valid "token" based on the FSA/DT we will be able to have the
         // associated symbol to append to the symbol table
-        for state in table.state_table {
-            let curr_state = 
-            for to_state in state {
-                match character {
+        loop {
+            println!("{:?}", curr_state);
+            match self.characters.next() {
                 /*
                 Letter => goto state 1 from state 0, peek, goto state 1 from state 1, peek
                 Digit  => goto state 3 from state 0, peek, goto state 1 from state 1, peek, goto state 3 from state 3, peek 
                 space  => peek, goto state 0 from state 0, goto state 2 from state 1, goto state 4 from state 3 => append token
                 */
-                    c if c.is_alphabetic() => {
-                         
-                    }
+                Some(c) if c.is_whitespace() => break,
 
-                    c if c.is_numeric() => {
-
-                    }
-
-                    // do something with whitespace
-                    _ => unimplemented!()
+                Some(c) if c.is_alphabetic() => {
+                    curr_state = States::Letter;
+                    token_string.push(c);
                 }
+
+                Some(c) if c.is_numeric() => {
+                    token_string.push(c);
+                    if curr_state.eq(&States::Letter) {
+                        curr_state = States::LetterDigit;
+                    }
+                    else {
+                        curr_state = States::Digit; 
+                    }
+                }
+
+                // Add a match for Seperators
+
+                // do something with whitespace
+                _ => unimplemented!()
             }
         }
-
+        println!("Final Token: {}", token_string);
         None
     }
 }

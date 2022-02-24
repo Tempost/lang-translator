@@ -2,7 +2,7 @@ type Validtable = [ [States; 3]; 3];
 type Symbols    = [String; 3];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum States {
+pub enum States {
     Start,
     Letter,
     Digit,

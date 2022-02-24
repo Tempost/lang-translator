@@ -3,7 +3,7 @@ use std::io;
 use std::iter::Peekable;
 use std::vec::IntoIter;
 
-use crate::compiler::fsa::Fsa;
+use crate::compiler::fsa::{Fsa, States};
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -16,7 +16,6 @@ pub enum Tokens {
     Seperator(Seperators)
 }
 
-// Required for later? to futher identify a symbol
 #[derive(Debug, Clone, PartialEq)]
 pub enum Keywords {
     Const(String),
@@ -28,20 +27,18 @@ pub enum Literals {
     Int(i32)
 }
 
-// Required for later? to futher identify a symbol
 #[derive(Debug, Clone, PartialEq)]
 pub enum Operators {
     Mop(String),
     AddOp(String),
 }
 
-// Required for later? to futher identify a symbol
 #[derive(Debug, Clone, PartialEq)]
 pub enum Seperators {
-    LB(String),
-    RB(String),
-    Comma(String),
-    Semi(String)
+    LB,
+    RB,
+    Comma,
+    Semi
 }
 
 pub struct Tokenize {
@@ -63,6 +60,14 @@ impl Tokenize {
 
 }
 
+fn valid_seperator(c: &char) -> bool {
+    let list = ['{', '}', ',', ';'];
+    if list.contains(c) {
+        return true;
+    }
+    false
+}
+
 // Here we need to use the FSA/Desicion table to cunstruct our tokens
 // Each call of next will return a Option<Result<Tokens>> aka a singular valid token
 // eventually use box or something else for error handling
@@ -70,15 +75,12 @@ impl Iterator for Tokenize {
     type Item = Result<Tokens>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // NOTE: what if instead of [0, 1, 2, 3, 4] i used my States enum?
         // TODO: Move this out of the function
         let table =  Fsa::new([
-        //   L  D  b
-            [1, 3, 0], // State 0 -> Start
-            [1, 1, 2], // State 1
-            [0, 0, 0], // State 2 <Identifier> -> Finish
-            [0, 3, 4], // State 3
-            [0, 0, 0]  // State 4 <Literal> -> Finish
+        //   L               D               b
+            [States::Letter, States::Digit , States::Start], // State 0
+            [States::Letter, States::Letter, States::Finish], // State 1
+            [States::Start,  States::Digit,  States::Finish], // State 2
         ],
         [
             String::from("<Identifier>"),
@@ -88,42 +90,33 @@ impl Iterator for Tokenize {
 
         let mut curr_state = States::Start;
         let mut token_string = String::from("");
+        let mut character: char;
 
         // do stuff with character, append to token_string -> check next to see if token ends
         // once we have a valid "token" based on the FSA/DT we will be able to have the
         // associated symbol to append to the symbol table
-        loop {
+        while curr_state != States::Finish {
             println!("{:?}", curr_state);
-            match self.characters.next() {
+            if let Some(c) = self.characters.next() {
+                character = c;
+            } else {
+                break;
+            }
+
+            match curr_state {
                 /*
                 Letter => goto state 1 from state 0, peek, goto state 1 from state 1, peek
                 Digit  => goto state 3 from state 0, peek, goto state 1 from state 1, peek, goto state 3 from state 3, peek 
                 space  => peek, goto state 0 from state 0, goto state 2 from state 1, goto state 4 from state 3 => append token
                 */
-                Some(c) if c.is_whitespace() => break,
-
-                Some(c) if c.is_alphabetic() => {
-                    curr_state = States::Letter;
-                    token_string.push(c);
-                }
-
-                Some(c) if c.is_numeric() => {
-                    token_string.push(c);
-                    if curr_state.eq(&States::Letter) {
-                        curr_state = States::LetterDigit;
-                    }
-                    else {
-                        curr_state = States::Digit; 
-                    }
-                }
-
-                // Add a match for Seperators
-
-                // do something with whitespace
-                _ => unimplemented!()
+                States::Start => continue,
+                States::Letter => continue,
+                States::Digit => continue,
+                _ => continue,
             }
         }
         println!("Final Token: {}", token_string);
         None
     }
 }
+

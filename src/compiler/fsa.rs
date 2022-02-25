@@ -1,71 +1,58 @@
-type Validtable = [ [States; 3]; 3];
-type Symbols    = [String; 3];
+// TODO: Refactor Validtable to hold terminal enum
+type Validtable = [ [i32; 11]; 16];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum States {
-    Start,
-    Letter,
-    Digit,
-    LetterDigit,
-    Finish
+pub enum Terminals {
+    Letter = 0,
+    Digit = 1,
+    LBracket = 2,
+    RBracket = 3,
+    Mop = 4,
+    Addop = 5,
+    Assignment = 6,
+    Semi = 7,
+    Comma = 8,
+    FSlash = 9,
+    Whitespace = 10
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Fsa {
     pub state_table: Validtable,
-    pub symbols:     Symbols 
 }
 
 impl Fsa {
-    pub fn new(table: Validtable, symbol_table: Symbols) -> Self {
+    pub fn new(table: Validtable) -> Self {
         return Fsa {
             state_table: table,
-            symbols:     symbol_table,
         }
     }
 }
-
+// table[state][terminal]
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn new_just_works() {
-        let table =  Fsa::new([
-            [States::Letter, States::Letter, States::Letter],
-            [States::Letter, States::Letter, States::Letter],
-            [States::Letter, States::Letter, States::Letter],
-        ],
-        [
-            String::from("var"),
-            String::from("int"),
-            String::from("double")
-        ]);
-
-        let valid_table: Validtable = [
-            [States::Letter, States::Letter, States::Letter],
-            [States::Letter, States::Letter, States::Letter],
-            [States::Letter, States::Letter, States::Letter],
-        ];
-
-        let valid_symbols: Symbols = [String::from("var"), String::from("int"), String::from("double")];
-
-        assert_eq!(table.state_table, valid_table);
-        assert_eq!(table.symbols, valid_symbols);
-    }
-
-    #[test]
     fn state_loop() {
-        // always passing test
+        // NOTE: What do I do for end states?
         let table =  Fsa::new([
-            [States::Letter, States::Digit, States::Start], // State 0
-            [States::Letter, States::Letter, States::Finish], // State 1
-            [States::Start, States::Digit, States::Finish], // State 2
-        ],
-        [
-            String::from("<Identifier>"),
-            String::from("<Literal>"),
-            String::from("<PlaceHolder>")
+            [ 1,  3,  5,  6,  7,  8,  9, 10, 11, 12, 0],
+            [ 1,  1,  2,  2,  2,  2,  2,  2,  2,  2, 2]
+            [],
+            [ 4,  3,  4,  4,  4,  4,  4,  4,  4,  4, 4],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [13, 13, 13, 13, 14, 13, 13, 13, 13, 13, 13],
+            [],
+            [14, 14, 14, 14, 15, 14, 14, 14, 14, 14, 14],
+            [14, 14, 14, 14, 14, 14, 14, 14, 14,  0, 14]
         ]);
 
         let mut curr = 0;

@@ -3,7 +3,7 @@ use std::io;
 use std::iter::Peekable;
 use std::vec::IntoIter;
 
-use crate::compiler::fsa::{Fsa, States};
+use crate::compiler::fsa::{Fsa, Terminals};
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -75,45 +75,29 @@ impl Iterator for Tokenize {
     type Item = Result<Tokens>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // TODO: Move this out of the function
-        let table =  Fsa::new([
-        //   L               D               b
-            [States::Letter, States::Digit , States::Start], // State 0
-            [States::Letter, States::Letter, States::Finish], // State 1
-            [States::Start,  States::Digit,  States::Finish], // State 2
-        ],
-        [
-            String::from("<Identifier>"),
-            String::from("<Literal>"),
-            String::from("<PlaceHolder>")
-        ]);
 
-        let mut curr_state = States::Start;
+        let mut curr_state = 
         let mut token_string = String::from("");
         let mut character: char;
 
         // do stuff with character, append to token_string -> check next to see if token ends
         // once we have a valid "token" based on the FSA/DT we will be able to have the
         // associated symbol to append to the symbol table
-        while curr_state != States::Finish {
+        loop {
             println!("{:?}", curr_state);
             if let Some(c) = self.characters.next() {
                 character = c;
             } else {
-                break;
+                break; // exit loop due to ?EOF?
+                // TODO: Error handling
             }
 
-            match curr_state {
-                /*
-                Letter => goto state 1 from state 0, peek, goto state 1 from state 1, peek
-                Digit  => goto state 3 from state 0, peek, goto state 1 from state 1, peek, goto state 3 from state 3, peek 
-                space  => peek, goto state 0 from state 0, goto state 2 from state 1, goto state 4 from state 3 => append token
-                */
-                States::Start => continue,
-                States::Letter => continue,
-                States::Digit => continue,
-                _ => continue,
+            // TODO: Determine if character is L, D, or other terminal.
+
+            match table[terminal][curr_state] {
+                // TODO: Set new state or finish token
             }
+
         }
         println!("Final Token: {}", token_string);
         None

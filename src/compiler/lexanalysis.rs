@@ -1,22 +1,60 @@
 use std::fs;
 use std::io;
-use std::iter::Peekable;
 use std::vec::IntoIter;
-
-use crate::compiler::fsa::{Fsa, Terminals};
 
 type Result<T> = std::result::Result<T, String>;
 
+type Validtable = [ [i32; 11]; 16];
+
+#[derive(Debug, Clone, Copy)]
+pub enum Terminals {
+    Letter = 0,
+    Digit = 1,
+    LBracket = 2,
+    RBracket = 3,
+    Mop = 4,
+    Addop = 5,
+    Assignment = 6,
+    Semi = 7,
+    Comma = 8,
+    FSlash = 9,
+    Whitespace = 10
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct Fsa {
+    state_table: Validtable,
+}
+
+const TABLE: Fsa =  Fsa {
+    state_table: 
+    [[ 1,  3,  5,  6,  7,  8,  9, 10, 11, 12,  0],
+    [ 1,  1,  2,  2,  2,  2,  2,  2,  2,  2,  2],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [ 4,  3,  4,  4,  4,  4,  4,  4,  4,  4,  4],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [13, 13, 13, 13, 14, 13, 13, 13, 13, 13, 13],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [14, 14, 14, 14, 15, 14, 14, 14, 14, 14, 14],
+    [14, 14, 14, 14, 14, 14, 14, 14, 14,  0, 14]]
+};
 
 pub struct Tokenize {
-    pub characters: Peekable<IntoIter<char>>
+    pub characters: IntoIter<char>,
 }
 
 impl Tokenize {
     pub fn to_struct(data: &str) -> Self {
         Tokenize { 
             characters: data.chars().collect::<Vec<_>>()
-                .into_iter().peekable()
+                .into_iter(),
         }
     }
 
@@ -24,7 +62,6 @@ impl Tokenize {
         Ok(Self::to_struct(&fs::read_to_string(filename)
             .expect("[ ERROR ] Something went wrong reading the file")))
     }
-
 }
 
 // Here we need to use the FSA/Desicion table to cunstruct our tokens
@@ -34,24 +71,6 @@ impl Iterator for Tokenize {
     type Item = Result<String>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let table =  Fsa::new([
-            [ 1,  3,  5,  6,  7,  8,  9, 10, 11, 12,  0],
-            [ 1,  1,  2,  2,  2,  2,  2,  2,  2,  2,  2],
-            [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-            [ 4,  3,  4,  4,  4,  4,  4,  4,  4,  4,  4],
-            [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-            [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-            [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-            [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-            [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-            [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-            [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-            [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-            [13, 13, 13, 13, 14, 13, 13, 13, 13, 13, 13],
-            [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-            [14, 14, 14, 14, 15, 14, 14, 14, 14, 14, 14],
-            [14, 14, 14, 14, 14, 14, 14, 14, 14,  0, 14]
-        ]);
 
         let mut token_string = String::from("");
 
@@ -66,8 +85,8 @@ impl Iterator for Tokenize {
             if let Some(c) = self.characters.next() {
                 character = c;
             } else {
-                break; // exit loop due to ?EOF?
                 // TODO: Error handling
+                return None
             }
 
             // Check what terminal we have
@@ -81,6 +100,10 @@ impl Iterator for Tokenize {
                     terminal = Terminals::Digit;
                 }
 
+                character if character.is_whitespace() => {
+                    terminal = Terminals::Whitespace;
+                }
+
                 '{' => terminal = Terminals::LBracket,
                 '}' => terminal = Terminals::RBracket,
                 ';' => terminal = Terminals::Semi,
@@ -90,66 +113,38 @@ impl Iterator for Tokenize {
                 ',' => terminal = Terminals::Comma,
                 '=' => terminal = Terminals::Assignment,
 
-                character if character.is_whitespace() => {
-                    terminal = Terminals::Whitespace;
-                }
-
                 _ => break // TODO: Error handling found invalid character
-
             }
             
-            curr_state = table.state_table[curr_state as usize][terminal as usize];
+            curr_state = TABLE.state_table[curr_state as usize][terminal as usize];
             match curr_state {
                 
-                // Whitespace
-                0 => {
-                    curr_state = table.state_table[curr_state as usize][terminal as usize];
+                // Ignoring whitespace and any comment strings
+                0 | 14 | 15 => {
+                    token_string.clear();
+                    continue;
                 }
 
-                1 => {
+                // Still creating a token, go to next character
+                1 | 3 | 12 => {
                     token_string.push(character);
-                    curr_state = table.state_table[curr_state as usize][terminal as usize];
                 }
 
-                3 => {
+                // Hit final character, break and send out the token
+                2 | 4  => break,
+
+                // Single branch from starting state, break and send out the token 
+                5 | 6 | 7 | 8 | 9 | 10 | 11 | 13  => {
                     token_string.push(character);
-                    curr_state = table.state_table[curr_state as usize][terminal as usize];
+                    break;
                 }
 
-                12 => {
-                    token_string.push(character);
-                    curr_state = table.state_table[curr_state as usize][terminal as usize];
-                }
-
-                14 => {
-                    token_string.push(character);
-                    curr_state = table.state_table[curr_state as usize][terminal as usize];
-                }
-
-                15 => {
-                    token_string.push(character);
-                    curr_state = table.state_table[curr_state as usize][terminal as usize];
-                }
-
-                2  => break,
-                4  => break,
-                5  => break,
-                6  => break,
-                7  => break,
-                8  => break,
-                9  => break,
-                10 => break,
-                11 => break,
-                13 => break,
-
-                
                 // TODO: Error, Some how hit an unreachable state
                 _ => panic!("[ ERROR ] Unreachable state, handle me better")
             }
-            println!("{:?}", terminal);
 
         }
-        println!("Final Token: {}", token_string);
-        None
+
+        Some(Ok(token_string))
     }
 }

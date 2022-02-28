@@ -28,7 +28,7 @@ struct Fsa {
 
 const TABLE: Fsa =  Fsa {
     state_table: 
-    [[ 1,  3,  5,  6,  7,  8,  9, 10, 11, 12,  0],
+   [[ 1,  3,  5,  6,  7,  8,  9, 10, 11, 12,  0],
     [ 1,  1,  2,  2,  2,  2,  2,  2,  2,  2,  2],
     [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
     [ 4,  3,  4,  4,  4,  4,  4,  4,  4,  4,  4],
@@ -96,7 +96,8 @@ impl Iterator for Tokenize {
                      terminal = Terminals::Letter;   
                 }
 
-                character if character.is_numeric() => {
+                // TODO: Find a better method for finding digits please
+                character if character.is_digit(10)  => {
                     terminal = Terminals::Digit;
                 }
 
@@ -116,6 +117,9 @@ impl Iterator for Tokenize {
                 _ => break // TODO: Error handling found invalid character
             }
             
+            // TODO: Turn self.characters back into a peekable iter and use that to peek at the
+            // next character to see if we need to keep making a token or break and report token
+            // back to caller
             curr_state = TABLE.state_table[curr_state as usize][terminal as usize];
             match curr_state {
                 

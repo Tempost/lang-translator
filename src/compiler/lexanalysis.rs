@@ -1,10 +1,11 @@
 use std::fs;
 use std::io;
 use std::vec::IntoIter;
+use std::iter::Peekable;
 
 type Result<T> = std::result::Result<T, String>;
 
-type Validtable = [ [i32; 11]; 16];
+type Validtable = [ [i32; 12]; 17];
 
 #[derive(Debug, Clone, Copy)]
 pub enum Terminals {
@@ -18,7 +19,8 @@ pub enum Terminals {
     Semi = 7,
     Comma = 8,
     FSlash = 9,
-    Whitespace = 10
+    Whitespace = 10,
+    Subtraction = 11
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -28,33 +30,34 @@ struct Fsa {
 
 const TABLE: Fsa =  Fsa {
     state_table: 
-   [[ 1,  3,  5,  6,  7,  8,  9, 10, 11, 12,  0],
-    [ 1,  1,  2,  2,  2,  2,  2,  2,  2,  2,  2],
-    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-    [ 4,  3,  4,  4,  4,  4,  4,  4,  4,  4,  4],
-    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-    [13, 13, 13, 13, 14, 13, 13, 13, 13, 13, 13],
-    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
-    [14, 14, 14, 14, 15, 14, 14, 14, 14, 14, 14],
-    [14, 14, 14, 14, 14, 14, 14, 14, 14,  0, 14]]
+   [[ 1,  3,  5,  6,  7,  8,  9, 10, 11, 12,  0, 16],
+    [ 1,  1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [ 4,  3,  4,  4,  4,  4,  4,  4,  4,  4,  4,  0],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [13, 13, 13, 13, 14, 13, 13, 13, 13, 13, 13, 13],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+    [14, 14, 14, 14, 15, 14, 14, 14, 14, 14, 14, 14],
+    [14, 14, 14, 14, 14, 14, 14, 14, 14,  0, 14, 14],
+    [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0]]
 };
 
 pub struct Tokenize {
-    pub characters: IntoIter<char>,
+    pub characters: Peekable<IntoIter<char>>,
 }
 
 impl Tokenize {
     pub fn to_struct(data: &str) -> Self {
         Tokenize { 
             characters: data.chars().collect::<Vec<_>>()
-                .into_iter(),
+                .into_iter().peekable(),
         }
     }
 
@@ -62,6 +65,35 @@ impl Tokenize {
         Ok(Self::to_struct(&fs::read_to_string(filename)
             .expect("[ ERROR ] Something went wrong reading the file")))
     }
+}
+
+fn get_terminal_enum(c: &char) -> Option<Terminals> {
+    match c {
+            c if c.is_alphabetic() => {
+                Some(Terminals::Letter)
+            }
+
+            // TODO: Find a better method for finding digits please
+            c if c.is_digit(10)  => {
+                Some(Terminals::Digit)
+            }
+
+            character if character.is_whitespace() => {
+                Some(Terminals::Whitespace)
+            }
+
+            '{' => Some(Terminals::LBracket),
+            '}' => Some(Terminals::RBracket),
+            ';' => Some(Terminals::Semi),
+            '+' => Some(Terminals::Addop),
+            '*' => Some(Terminals::Mop),
+            '/' => Some(Terminals::FSlash),
+            ',' => Some(Terminals::Comma),
+            '=' => Some(Terminals::Assignment),
+            '-' => Some(Terminals::Subtraction),
+
+            _ => None // TODO: Error handling found invalid character
+        }
 }
 
 // Here we need to use the FSA/Desicion table to cunstruct our tokens
@@ -81,7 +113,7 @@ impl Iterator for Tokenize {
         loop {
             let character: char;
 
-            // Handle Option<> and safely unwrap
+            // Handle Option return for next() method and safely unwrap
             if let Some(c) = self.characters.next() {
                 character = c;
             } else {
@@ -91,35 +123,13 @@ impl Iterator for Tokenize {
 
             // Check what terminal we have
             let terminal: Terminals;
-            match character {
-                character if character.is_alphabetic() => {
-                     terminal = Terminals::Letter;   
-                }
-
-                // TODO: Find a better method for finding digits please
-                character if character.is_digit(10)  => {
-                    terminal = Terminals::Digit;
-                }
-
-                character if character.is_whitespace() => {
-                    terminal = Terminals::Whitespace;
-                }
-
-                '{' => terminal = Terminals::LBracket,
-                '}' => terminal = Terminals::RBracket,
-                ';' => terminal = Terminals::Semi,
-                '+' => terminal = Terminals::Addop,
-                '*' => terminal = Terminals::Mop,
-                '/' => terminal = Terminals::FSlash,
-                ',' => terminal = Terminals::Comma,
-                '=' => terminal = Terminals::Assignment,
-
-                _ => break // TODO: Error handling found invalid character
+            if let Some(t) = get_terminal_enum(&character) {
+                terminal = t;
+            } else {
+                // TODO: Better error handling. Recover and keep parsing but report error
+                panic!("[ ERROR ] Hit unrecognized token.")
             }
-            
-            // TODO: Turn self.characters back into a peekable iter and use that to peek at the
-            // next character to see if we need to keep making a token or break and report token
-            // back to caller
+                        
             curr_state = TABLE.state_table[curr_state as usize][terminal as usize];
             match curr_state {
                 
@@ -129,18 +139,50 @@ impl Iterator for Tokenize {
                     continue;
                 }
 
-                // Still creating a token, go to next character
-                1 | 3 | 12 => {
-                    token_string.push(character);
-                }
-
                 // Hit final character, break and send out the token
                 2 | 4  => break,
 
                 // Single branch from starting state, break and send out the token 
-                5 | 6 | 7 | 8 | 9 | 10 | 11 | 13  => {
+                5 | 6 | 7 | 8 | 9 | 10 | 11 | 13 | 16  => {
                     token_string.push(character);
                     break;
+                }
+
+                12 => {
+                    let peeked: &char;
+                    if let Some(pc) = self.characters.peek() {
+                        peeked = pc;
+                    } else {
+                        // TODO: Do something if nothing peekable?
+                        break
+                    }
+
+                    // TODO: This is were we will handle division later on.
+                   match get_terminal_enum(peeked).unwrap() {
+                       Terminals::Mop => continue,
+                       _ => break
+                   }
+
+                }
+
+                // Still creating a token, go to next character
+                1 | 3 => {
+                    let peeked: &char;
+                    if let Some(pc) = self.characters.peek() {
+                        peeked = pc;
+                    } else {
+                        // TODO: Do something if nothing peekable?
+                        break
+                    }
+                    token_string.push(character);
+
+                    // If the return value is anything but a letter or digit break and report
+                    // final token
+                    match get_terminal_enum(peeked).unwrap() {
+                        Terminals::Letter => continue, 
+                        Terminals::Digit  => continue,
+                        _ => break
+                    }
                 }
 
                 // TODO: Error, Some how hit an unreachable state

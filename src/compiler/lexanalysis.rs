@@ -65,6 +65,9 @@ impl Tokenize {
         Ok(Self::to_struct(&fs::read_to_string(filename)
             .expect("[ ERROR ] Something went wrong reading the file")))
     }
+
+    pub fn write_out_symbols()  {// return result with error or nothing
+    }
 }
 
 fn get_terminal_enum(c: &char) -> Option<Terminals> {

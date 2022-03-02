@@ -3,5 +3,5 @@ CLASS Pgm1 {
     VAR X, Y, Z;
     /* hello */
     Y = 97;
-    X = M * N + 18 - y;
+    X = M * N + 18 - Y;
 }

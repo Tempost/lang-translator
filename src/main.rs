@@ -30,17 +30,15 @@ fn main() {
 
     let scanner_fsa = Fsa::define_table(&scanner_table);
     let mut lex = Tokenize::create_scanner("program.java", &scanner_fsa).unwrap();
-    lex.create_symbol_table("test");
-
+    lex.run_symbolizer("program.symbols");
     // let mut stdin = io::stdin();
     // let mut stdout = io::stdout();
 
     // while let Some(token) = lex.next() {
-    //     println!("Token: {}", token);
+    //     println!("Token: {} Symbol: {:?}", token.name, token.symbol);
         // write!(stdout, "Press any key to continue to next token...").unwrap();
         // stdout.flush().unwrap();
 
         // let _ = stdin.read(&mut [0u8]).unwrap();
     // }
-    
 }

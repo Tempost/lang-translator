@@ -6,7 +6,7 @@ use std::vec::IntoIter;
 use crate::compiler::fsa::Fsa;
 
 // TODO: Add more terminals
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Terminals {
     Letter = 0,
     Digit = 1,
@@ -22,17 +22,30 @@ pub enum Terminals {
     Minus = 11,
 }
 
+#[derive(Debug)]
+pub enum Symbols {
+    Var,
+    NumLit,
+    OpenBracket,
+    CloseBracket,
+    Mop,
+    Addop,
+    Assign,
+    Semi,
+    Comma,
+    Unknown(String)
+}
+
+pub struct Token {
+    pub name: String,
+    pub symbol: Symbols
+}
+
 pub struct Tokenize<'a> {
     pub characters: Peekable<IntoIter<char>>,
-    pub table: &'a Fsa<'a>,
+    pub fsa: &'a Fsa<'a>,
 }
 
-struct TokenList {
-    tokens: Peekable<IntoIter<String>>
-}
-
-const RESERVED_WORDS: [&str; 10] = ["CONST", "IF", "VAR", "THEN", "PROCEDURE", "WHILE", "CALL", "DO", "ODD", "CLASS"];
-const SYMBOLS: [&str; 14] = ["$Class", "$Program Name", "$Openbrace", "$Closebrace", "$Const", "Constvar", "$=", "Numeric Literal", "$Semi", "$VarDeclaration", "Var", "$Comma", "$Addop", "$Mop"];
 // const CHAR_DELIMITERS: [char; 13] = ['=', '.', ';', '+', '-', '*', '/', '(', ')', '<', '>', '{', '}'];
 // const STR_DELIMITERS: [&str; 6] = ["==", ">=", "<=", "!=", "/*", "*/"];
 
@@ -43,17 +56,17 @@ impl<'a> Tokenize<'a> {
 
         Ok(Tokenize {
             characters: contents.chars().collect::<Vec<_>>().into_iter().peekable(),
-            table,
+            fsa: table,
             })
     }
 
-    pub fn create_symbol_table(&mut self, filename: &str) {
-        let mut list: TokenList;
-        while let Some(token) = self.next() {
-            let test = RESERVED_WORDS.into_iter().filter(|&s| s == token).collect::<Vec<_>>();
-            println!("{:?}", test);
+    pub fn run_symbolizer(&mut self, filename: &str) {
+        let mut peek_self = self.peekable();
+        while let Some(token) = peek_self.next() {
+            
         }
     }
+
 }
 
 fn parse_terminal_enum(c: &char) -> Option<Terminals> {
@@ -79,10 +92,14 @@ fn parse_terminal_enum(c: &char) -> Option<Terminals> {
 }
 
 impl<'a> Iterator for Tokenize<'a> {
-    type Item = String;
+    type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut token = String::from("");
+        let mut token = Token {
+            name: String::from(""),
+            symbol: Symbols::Unknown(String::from("Empty"))
+        };
+
         let mut curr_state: i32 = 0;
 
         loop {
@@ -105,20 +122,103 @@ impl<'a> Iterator for Tokenize<'a> {
                 panic!("[ ERROR ] Hit unrecognized terminal.")
             }
 
-            curr_state = self.table.table[curr_state as usize][terminal as usize];
+            curr_state = self.fsa.table[curr_state as usize][terminal as usize];
             match curr_state {
                 // Ignoring whitespace and any comment strings
                 0 | 14 | 15 => {
-                    token.clear();
-                    continue;
+                    token.name.clear();
                 }
 
+                1 | 3 => {
+                    let peeked: &char;
+                    if let Some(pc) = self.characters.peek() {
+                        peeked = pc;
+                    } else {
+                        break; // Leave loop if nothing was found when peeking
+                    }
+
+                    token.name.push(character);
+
+                    match parse_terminal_enum(peeked).unwrap() {
+                        Terminals::Letter => continue,
+                        Terminals::Digit => continue,
+                        _ => {
+                            if terminal == Terminals::Letter {
+                                token.symbol = Symbols::Var;
+                                break
+                            }
+
+                            if terminal == Terminals::Digit {
+                                token.symbol = Symbols::NumLit;
+                                break
+                            }
+                        },
+                    }
+                }
+                
                 // Hit final character, break and send out the token
-                2 | 4 => break,
+                2 => {
+                    token.symbol = Symbols::Var;
+                    break;
+                }
+
+                4 => {
+                    token.symbol = Symbols::NumLit;
+                    break;
+                }
 
                 // Single branch from starting state, break and send out the token
-                5 | 6 | 7 | 8 | 9 | 10 | 11 | 13 | 16 => {
-                    token.push(character);
+                5 => {
+                    token.name.push(character);
+                    token.symbol = Symbols::OpenBracket;
+                    break;
+                }
+
+                6 => {
+                    token.name.push(character);
+                    token.symbol = Symbols::CloseBracket;
+                    break;
+                }
+                
+                7 => {
+                    token.name.push(character);
+                    token.symbol = Symbols::Mop;
+                    break;
+                }
+                
+                8 => {
+                    token.name.push(character);
+                    token.symbol = Symbols::Addop;
+                    break;
+                }
+                
+                9 => {
+                    token.name.push(character);
+                    token.symbol = Symbols::Assign;
+                    break;
+                }
+                
+                10 => {
+                    token.name.push(character);
+                    token.symbol = Symbols::Semi;
+                    break;
+                }
+                
+                11 => {
+                    token.name.push(character);
+                    token.symbol = Symbols::Comma;
+                    break;
+                }
+
+                13 => {
+                    token.name.push(character);
+                    token.symbol = Symbols::Mop;
+                    break;
+                }
+
+                16 => {
+                    token.name.push(character);
+                    token.symbol = Symbols::Addop;
                     break;
                 }
 
@@ -133,24 +233,7 @@ impl<'a> Iterator for Tokenize<'a> {
                     // TODO: This is where we will handle division later on.
                     match parse_terminal_enum(peeked).unwrap() {
                         Terminals::Mult => continue,
-                        _ => break,
-                    }
-                }
-
-                // Still creating a token, go to next character
-                1 | 3 => {
-                    let peeked: &char;
-                    if let Some(pc) = self.characters.peek() {
-                        peeked = pc;
-                    } else {
-                        break; // Leave loop if nothing was found when peeking
-                    }
-                    token.push(character);
-
-                    match parse_terminal_enum(peeked).unwrap() {
-                        Terminals::Letter => continue,
-                        Terminals::Digit => continue,
-                        Terminals::Whitespace => continue,
+                        Terminals::Slash => continue,
                         _ => break,
                     }
                 }

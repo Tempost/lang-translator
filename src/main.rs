@@ -3,7 +3,8 @@
 
 mod compiler;
 
-pub use crate::compiler::lexanalysis::{Fsa, Tokenize};
+use crate::compiler::lexanalysis::Tokenize;
+use crate::compiler::fsa::Fsa;
 
 fn main() {
     let scanner_table = vec![
@@ -26,20 +27,20 @@ fn main() {
         vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     ];
 
-    let symbol_table = vec![vec![0; 5]; 5];
 
-    let tables = Fsa::define_tables(&scanner_table, &symbol_table);
-    let mut lex = Tokenize::create_scanner("program.java", &tables).unwrap();
+    let scanner_fsa = Fsa::define_table(&scanner_table);
+    let mut lex = Tokenize::create_scanner("program.java", &scanner_fsa).unwrap();
+    lex.create_symbol_table("test");
 
     // let mut stdin = io::stdin();
     // let mut stdout = io::stdout();
 
     // while let Some(token) = lex.next() {
-    //     println!("Token: {}", token.unwrap());
-    //     // write!(stdout, "Press any key to continue to next token...").unwrap();
-    //     // stdout.flush().unwrap();
+    //     println!("Token: {}", token);
+        // write!(stdout, "Press any key to continue to next token...").unwrap();
+        // stdout.flush().unwrap();
 
-    //     // let _ = stdin.read(&mut [0u8]).unwrap();
+        // let _ = stdin.read(&mut [0u8]).unwrap();
     // }
-    lex.write_symbol_table("taco");
+    
 }

@@ -13,7 +13,7 @@ fn main() {
     // let mut stdout = io::stdout();
 
     while let Some(token) = lex.next() {
-        let format = format!("Token: {:<10} Symbol: {:?}", token.name, token.symbol);
+        let format = format!("Token: {:<10} Symbol: {:?}", token.name, token.class);
         println!("{}", format);
         // write!(stdout, "Press any key to continue to next token...").unwrap();
         // stdout.flush().unwrap();

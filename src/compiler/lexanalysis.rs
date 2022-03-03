@@ -22,7 +22,8 @@ pub enum Terminals {
 }
 
 #[derive(Debug)]
-pub enum Symbols {
+pub enum TokenClass {
+    Class,
     Var,
     NumLit,
     OpenBracket,
@@ -37,7 +38,7 @@ pub enum Symbols {
 
 pub struct Token {
     pub name: String,
-    pub symbol: Symbols
+    pub class: TokenClass
 }
 
 pub struct Tokenize {
@@ -115,7 +116,7 @@ impl Iterator for Tokenize {
     fn next(&mut self) -> Option<Self::Item> {
         let mut token = Token {
             name: String::from(""),
-            symbol: Symbols::Unknown(String::from("Empty"))
+            class: TokenClass::Unknown(String::from("Empty"))
         };
 
         let mut curr_state: i32 = 0;
@@ -163,12 +164,12 @@ impl Iterator for Tokenize {
                         Terminals::Digit => continue,
                         _ => {
                             if terminal == Terminals::Letter {
-                                token.symbol = Symbols::Var;
+                                token.class = TokenClass::Var;
                                 break;
                             }
 
                             if terminal == Terminals::Digit {
-                                token.symbol = Symbols::NumLit;
+                                token.class = TokenClass::NumLit;
                                 break;
                             }
                         },
@@ -177,67 +178,67 @@ impl Iterator for Tokenize {
                 
                 // Hit final letter/digit, break, attach correct class and send out token
                 2 => {
-                    token.symbol = Symbols::Var;
+                    token.class = TokenClass::Var;
                     break;
                 }
 
                 4 => {
-                    token.symbol = Symbols::NumLit;
+                    token.class = TokenClass::NumLit;
                     break;
                 }
 
                 // Single branch from starting state, break and send out the token
                 5 => {
                     token.name.push(character);
-                    token.symbol = Symbols::OpenBracket;
+                    token.class = TokenClass::OpenBracket;
                     break;
                 }
 
                 6 => {
                     token.name.push(character);
-                    token.symbol = Symbols::CloseBracket;
+                    token.class = TokenClass::CloseBracket;
                     break;
                 }
                 
                 7 => {
                     token.name.push(character);
-                    token.symbol = Symbols::Mop;
+                    token.class = TokenClass::Mop;
                     break;
                 }
                 
                 8 => {
                     token.name.push(character);
-                    token.symbol = Symbols::Addop;
+                    token.class = TokenClass::Addop;
                     break;
                 }
                 
                 9 => {
                     token.name.push(character);
-                    token.symbol = Symbols::Assign;
+                    token.class = TokenClass::Assign;
                     break;
                 }
                 
                 10 => {
                     token.name.push(character);
-                    token.symbol = Symbols::Semi;
+                    token.class = TokenClass::Semi;
                     break;
                 }
                 
                 11 => {
                     token.name.push(character);
-                    token.symbol = Symbols::Comma;
+                    token.class = TokenClass::Comma;
                     break;
                 }
 
                 13 => {
                     token.name.push(character);
-                    token.symbol = Symbols::Mop;
+                    token.class = TokenClass::Mop;
                     break;
                 }
 
                 16 => {
                     token.name.push(character);
-                    token.symbol = Symbols::Addop;
+                    token.class = TokenClass::Addop;
                     break;
                 }
 
@@ -262,6 +263,10 @@ impl Iterator for Tokenize {
                 // proper error handling
                 _ => panic!("[ ERROR ] Unreachable state, handle me better"),
             }
+        }
+
+        if token.name == "CLASS" {
+            token.class = TokenClass::Class;
         }
 
         // Send out token wrapped in option. Will return None to detonte end of Iter

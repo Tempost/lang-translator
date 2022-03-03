@@ -3,9 +3,8 @@ use std::io;
 use std::iter::Peekable;
 use std::vec::IntoIter;
 
-use crate::compiler::fsa::Fsa;
+pub type ValidTable = Vec<Vec<i32>>;
 
-// TODO: Add more terminals
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Terminals {
     Letter = 0,
@@ -41,16 +40,33 @@ pub struct Token {
     pub symbol: Symbols
 }
 
-pub struct Tokenize<'a> {
+pub struct Tokenize {
     pub characters: Peekable<IntoIter<char>>,
-    pub fsa: &'a Fsa<'a>,
+    fsa: ValidTable,
 }
 
-// const CHAR_DELIMITERS: [char; 13] = ['=', '.', ';', '+', '-', '*', '/', '(', ')', '<', '>', '{', '}'];
-// const STR_DELIMITERS: [&str; 6] = ["==", ">=", "<=", "!=", "/*", "*/"];
+impl Tokenize {
+    pub fn create_scanner(filename: &str) -> io::Result<Self> {
+        let table = vec![
+            vec![1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 0, 16],
+            vec![1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            vec![4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 0],
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            vec![13, 13, 13, 13, 14, 13, 13, 13, 13, 13, 13, 13],
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            vec![14, 14, 14, 14, 15, 14, 14, 14, 14, 14, 14, 14],
+            vec![14, 14, 14, 14, 14, 14, 14, 14, 14, 0, 14, 14],
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        ];
 
-impl<'a> Tokenize<'a> {
-    pub fn create_scanner(filename: &str, table: &'a Fsa) -> io::Result<Self> {
         let contents =
             &fs::read_to_string(filename).expect("[ ERROR Something went wrong reading the file]");
 
@@ -63,12 +79,11 @@ impl<'a> Tokenize<'a> {
     pub fn run_symbolizer(&mut self, filename: &str) {
         let mut peek_self = self.peekable();
         while let Some(token) = peek_self.next() {
-            
         }
     }
-
 }
 
+// From input character determine what enum to relate with said character
 fn parse_terminal_enum(c: &char) -> Option<Terminals> {
     match c {
         c if c.is_alphabetic() => Some(Terminals::Letter),
@@ -91,9 +106,12 @@ fn parse_terminal_enum(c: &char) -> Option<Terminals> {
     }
 }
 
-impl<'a> Iterator for Tokenize<'a> {
+impl Iterator for Tokenize {
     type Item = Token;
 
+    // Parse tokens, using whitespace as our delimiter to denote a final token
+    // Each token is constructed based on a input FSA, which was constructed when calling
+    // the create_scanner function
     fn next(&mut self) -> Option<Self::Item> {
         let mut token = Token {
             name: String::from(""),
@@ -122,13 +140,14 @@ impl<'a> Iterator for Tokenize<'a> {
                 panic!("[ ERROR ] Hit unrecognized terminal.")
             }
 
-            curr_state = self.fsa.table[curr_state as usize][terminal as usize];
+            curr_state = self.fsa[curr_state as usize][terminal as usize];
             match curr_state {
                 // Ignoring whitespace and any comment strings
                 0 | 14 | 15 => {
                     token.name.clear();
                 }
 
+                // Still parsing Letter/Digit
                 1 | 3 => {
                     let peeked: &char;
                     if let Some(pc) = self.characters.peek() {
@@ -145,18 +164,18 @@ impl<'a> Iterator for Tokenize<'a> {
                         _ => {
                             if terminal == Terminals::Letter {
                                 token.symbol = Symbols::Var;
-                                break
+                                break;
                             }
 
                             if terminal == Terminals::Digit {
                                 token.symbol = Symbols::NumLit;
-                                break
+                                break;
                             }
                         },
                     }
                 }
                 
-                // Hit final character, break and send out the token
+                // Hit final letter/digit, break, attach correct class and send out token
                 2 => {
                     token.symbol = Symbols::Var;
                     break;
@@ -222,6 +241,7 @@ impl<'a> Iterator for Tokenize<'a> {
                     break;
                 }
 
+                // Handling comments
                 12 => {
                     let peeked: &char;
                     if let Some(pc) = self.characters.peek() {
@@ -244,6 +264,7 @@ impl<'a> Iterator for Tokenize<'a> {
             }
         }
 
+        // Send out token wrapped in option. Will return None to detonte end of Iter
         Some(token)
     }
 }

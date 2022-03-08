@@ -8,7 +8,7 @@ pub type ValidTable = Vec<Vec<i32>>;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Terminals {
-    Letter = 0,
+    Letter,
     Digit,
     OpenBracket,
     CloseBracket,
@@ -20,6 +20,7 @@ pub enum Terminals {
     Slash,
     Whitespace,
     Minus,
+    Unknown
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -127,8 +128,9 @@ impl Tokenize {
         let mut peek_self = self.peekable();
         let mut curr_state: i32 = 0;
         let mut new_state: i32 = 0;
+
         while let Some(token) = peek_self.next() {
-            let token_index = get_token_index(token.class.as_ref().unwrap());
+            let token_index = usize::from(token.class.unwrap());
             let mut symbol_index = 1;
             new_state = table[curr_state as usize][token_index];
 
@@ -146,63 +148,86 @@ impl Tokenize {
     }
 }
 
-fn get_token_index(class: &TokenClass) -> usize{
-    match class {
-        TokenClass::ReservedWord(r) => {
-            match r {
-                ReservedWords::Class => 0,
-                ReservedWords::Const => 1,
-                ReservedWords::Var => 2,
+impl From<TokenClass> for usize {
+    fn from(class: TokenClass) -> usize {
+        match class {
+            TokenClass::ReservedWord(r) => {
+                match r {
+                    ReservedWords::Class => 0,
+                    ReservedWords::Const => 1,
+                    ReservedWords::Var => 2,
+                }
             }
-        }
-        TokenClass::Identifier(i) => {
-            match i {
-                Identifiers::Identifier => 3,
+            TokenClass::Identifier(i) => {
+                match i {
+                    Identifiers::Identifier => 3,
+                }
             }
-        }
-        TokenClass::Literal(l) => {
-            match l {
-                Literals::Integer => 4,
+            TokenClass::Literal(l) => {
+                match l {
+                    Literals::Integer => 4,
+                }
             }
-        }
-        TokenClass::Op(o) => {
-            match o {
-                Ops::Mop => 7,
-                Ops::Addop => 8,
-                Ops::Assignment => 9,
+            TokenClass::Op(o) => {
+                match o {
+                    Ops::Mop => 7,
+                    Ops::Addop => 8,
+                    Ops::Assignment => 9,
+                }
             }
-        }
-        TokenClass::Delimiter(d) => {
-            match d {
-                Delimiters::OpenBracket => 5,
-                Delimiters::CloseBracket => 6,
-                Delimiters::Semi => 10,
-                Delimiters::Comma => 11,
+            TokenClass::Delimiter(d) => {
+                match d {
+                    Delimiters::OpenBracket => 5,
+                    Delimiters::CloseBracket => 6,
+                    Delimiters::Semi => 10,
+                    Delimiters::Comma => 11,
+                }
             }
         }
     }
 }
 
-// From input character determine what enum to relate with input character
-fn match_to_terminal(ch: &char) -> Option<Terminals> {
-    match ch {
-        c if c.is_alphabetic() => Some(Terminals::Letter),
+impl From<Terminals> for usize {
+    fn from(t: Terminals) -> usize {
+        match t {
+            Terminals::Letter => 0,
+            Terminals::Digit => 1,
+            Terminals::OpenBracket => 2,
+            Terminals::CloseBracket => 3,
+            Terminals::Mult => 4,
+            Terminals::Add => 5,
+            Terminals::Equal => 6,
+            Terminals::Semi => 7,
+            Terminals::Comma => 8,
+            Terminals::Slash => 9,
+            Terminals::Whitespace => 10,
+            Terminals::Minus => 11,
+            Terminals::Unknown => 12,
+        }
+    }
+}
 
-        c if c.is_digit(10) => Some(Terminals::Digit),
+impl From<&char> for Terminals {
+    fn from(ch: &char) -> Terminals {
+        match ch {
+            c if c.is_alphabetic() => Terminals::Letter,
 
-        character if character.is_whitespace() => Some(Terminals::Whitespace),
+            c if c.is_digit(10) => Terminals::Digit,
 
-        '{' => Some(Terminals::OpenBracket),
-        '}' => Some(Terminals::CloseBracket),
-        ';' => Some(Terminals::Semi),
-        '+' => Some(Terminals::Add),
-        '*' => Some(Terminals::Mult),
-        '/' => Some(Terminals::Slash),
-        ',' => Some(Terminals::Comma),
-        '=' => Some(Terminals::Equal),
-        '-' => Some(Terminals::Minus),
+            character if character.is_whitespace() => Terminals::Whitespace,
 
-        _ => None, // TODO: Error handling found invalid terminal
+            '{' => Terminals::OpenBracket,
+            '}' => Terminals::CloseBracket,
+            ';' => Terminals::Semi,
+            '+' => Terminals::Add,
+            '*' => Terminals::Mult,
+            '/' => Terminals::Slash,
+            ',' => Terminals::Comma,
+            '=' => Terminals::Equal,
+            '-' => Terminals::Minus,
+
+            _ => Terminals::Unknown
+        }
     }
 }
 
@@ -232,15 +257,9 @@ impl Iterator for Tokenize {
             }
 
             // Check what terminal we have
-            let terminal: Terminals;
-            if let Some(t) = match_to_terminal(&character) {
-                terminal = t;
-            } else {
-                // TODO: Better error handling. Recover and keep parsing but report error
-                panic!("[ ERROR ] Hit unrecognized terminal.")
-            }
+            let terminal: Terminals = Terminals::from(&character);
 
-            curr_state = self.fsa[curr_state as usize][terminal as usize];
+            curr_state = self.fsa[curr_state as usize][usize::from(terminal)];
             match curr_state {
                 // Ignoring whitespace and any comment strings
                 0 | 14 | 15 => {
@@ -248,16 +267,14 @@ impl Iterator for Tokenize {
                 }
 
                 1  => {
-                    let peeked = self.characters.peek().unwrap(); 
-
                     token.name.push(character);
 
                     // Handling the case where we find a delimiter after a letter
-                    match match_to_terminal(peeked).unwrap() {
+                    let peeked = self.characters.peek().unwrap(); 
+                    match Terminals::from(peeked) {
                         Terminals::Letter => continue,
                         Terminals::Digit => continue,
                         _ => {
-
                             if terminal == Terminals::Letter {
                                 token.class = Some(TokenClass::Identifier(Identifiers::Identifier));
                                 break;
@@ -267,12 +284,11 @@ impl Iterator for Tokenize {
                 }
 
                 3 => {
-                    let peeked = self.characters.peek().unwrap(); 
-
                     token.name.push(character);
 
                     // Handling the case where we find a delimiter after a digit
-                    match match_to_terminal(peeked).unwrap() {
+                    let peeked = self.characters.peek().unwrap(); 
+                    match Terminals::from(peeked){
                         Terminals::Letter => continue,
                         Terminals::Digit => continue,
                         _ => {
@@ -360,7 +376,7 @@ impl Iterator for Tokenize {
                     }
 
                     // TODO: This is where we will handle division later on.
-                    match match_to_terminal(peeked).unwrap() {
+                    match Terminals::from(peeked) {
                         Terminals::Mult => continue,
                         Terminals::Slash => continue,
                         _ => break,
@@ -373,6 +389,8 @@ impl Iterator for Tokenize {
             }
         }
 
+        // Checking if our current token is one of our reserved words and changing its token class
+        // to match before sending the token out
         match token.name.as_str() {
                 "CLASS" => token.class = Some(TokenClass::ReservedWord(ReservedWords::Class)),
                 "CONST" => token.class = Some(TokenClass::ReservedWord(ReservedWords::Const)),

@@ -1,13 +1,10 @@
-use std::fs;
-use std::io;
-use std::io::Write;
+use std::fs::{self, File};
+use std::io::{self, BufRead, Write};
 use std::iter::Peekable;
 use std::vec::IntoIter;
 
-pub type ValidTable = Vec<Vec<i32>>;
-
 #[derive(Debug, PartialEq, Copy, Clone)]
-pub enum Terminals {
+pub enum Terminal {
     Letter,
     Digit,
     OpenBracket,
@@ -20,7 +17,7 @@ pub enum Terminals {
     Slash,
     Whitespace,
     Minus,
-    Unknown
+    Unknown,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -36,19 +33,18 @@ pub enum TokenClass {
 pub enum ReservedWords {
     Class,
     Const,
-    Var
+    Var,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Identifiers {
-    Identifier
+    Identifier,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Literals {
-    Integer
+    Integer,
 }
-
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Delimiters {
@@ -67,166 +63,192 @@ pub enum Ops {
 
 pub struct Token {
     pub name: String,
-    pub class: Option<TokenClass>
+    pub class: Option<TokenClass>,
 }
 
 pub struct Tokenize {
     pub characters: Peekable<IntoIter<char>>,
-    fsa: ValidTable,
+}
+
+fn debug_print_kek(curr_state: &usize, name: &str, flag: bool) {
+    let added: &str = if flag { "ADDED" } else { "" };
+
+    println!(
+        "State: {} Found: {} {}",
+        curr_state,
+        format_args!("{:<7}", name),
+        added
+    )
 }
 
 impl Tokenize {
     pub fn create_scanner(filename: &str) -> io::Result<Self> {
-        let table = vec![
-            vec![1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 0, 16],         // State 0
-            vec![1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],             // State 1
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],             // State 2
-            vec![4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 0],             // State 3
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],             // State 4
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],             // State 5
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],             // State 6
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],             // State 7
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],             // State 8
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],             // State 9
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],             // State 10
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],             // State 11
-            vec![13, 13, 13, 13, 14, 13, 13, 13, 13, 13, 13, 13], // State 12
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],             // State 13
-            vec![14, 14, 14, 14, 15, 14, 14, 14, 14, 14, 14, 14], // State 14
-            vec![14, 14, 14, 14, 14, 14, 14, 14, 14, 0, 14, 14],  // State 15
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],             // State 16
-        ];
-
-        let contents =
-            &fs::read_to_string(filename).expect("[ ERROR ] Something went wrong reading the file]");
+        let contents = &fs::read_to_string(filename)
+            .expect("[ ERROR ] Something went wrong reading the file]");
 
         Ok(Tokenize {
             characters: contents.chars().collect::<Vec<_>>().into_iter().peekable(),
-            fsa: table,
-            })
+        })
     }
 
     // NOTE: Unfinished symbol table construction
     pub fn create_symbol_table(&mut self, filename: &str) {
-        let table = vec![
-            vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],              // State 0
-            vec![0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0],              // State 1
-            vec![0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0],              // State 2
-            vec![0, 4, 8, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0],             // State 3
-            vec![0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0],              // State 4
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0],              // State 5
-            vec![0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0],              // State 6
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 4, 0],              // State 7
-            vec![0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0],              // State 8
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 8, 0],              // State 9
-            vec![10, 10, 10, 10, 11, 10, 10, 10, 10, 10, 10, 10, 12], // State 10
-            vec![10, 10, 10, 10, 11, 10, 10, 10, 10, 10, 10, 10, 12], // State 11
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]];             // State 12
+        let mut file =
+            fs::File::create(filename).expect("[ ERROR ] Something went wrong creating the file.");
 
-        let mut file = fs::File::create(filename).expect("[ ERROR ] Something went wrong creating the file.");
-
+        // Make our token iterator peekable
         let mut peek_self = self.peekable();
-        let mut curr_state: i32 = 0;
-        let mut new_state: i32 = 0;
+        let mut curr_state: usize = 0;
+        let mut goto_state: usize = 0; 
+        let mut addr: u32 = 0;
+
+        file.write_fmt(format_args!(
+            "{:<6} {:<10} {:<5} {:<7} {}\n",
+            "Symbol", "Type", "Value", "Address", "Segment"
+        ))
+        .ok();
 
         while let Some(token) = peek_self.next() {
-            let token_index = usize::from(token.class.unwrap());
-            let mut symbol_index = 1;
-            new_state = table[curr_state as usize][token_index];
+            goto_state = 
+                Tokenize::table_lookup(curr_state, usize::from(token.class.unwrap()), "symbol_fsa");
 
-            match curr_state {
-                0 | 2 | 3 => {},
-                1 => {
-                    file.write_fmt(format_args!("{:>3} {:>5} {:>10?} {:>5} {:>5} {:>2}", 
-                                      symbol_index, token.name, "$program name", "", 0, "CS")).ok();
-                    symbol_index += 1;
+            match goto_state {
+                0 | 1 | 3 | 4 | 6 | 7 | 8 | 10 => debug_print_kek(&curr_state, &token.name, false),
+
+                2 => {
+                    Tokenize::write_token(&mut file, &token.name, "$function", &addr);
+                    debug_print_kek(&curr_state, &token.name, true)
                 }
+
+                5 => {
+                    Tokenize::write_token(&mut file, &token.name, "Constvar", &addr);
+
+                    addr += 2; 
+                    debug_print_kek(&curr_state, &token.name, true)
+                }
+
+                9 => {
+                    Tokenize::write_token(&mut file, &token.name, "Var", &addr);
+
+                    addr += 2;
+                    debug_print_kek(&curr_state, &token.name, true)
+                }
+
+                11 => {
+                    Tokenize::write_token(&mut file, &token.name, "Literal", &addr);
+
+                    addr += 2;
+                    debug_print_kek(&curr_state, &token.name, true)
+                }
+
                 _ => panic!("[ ERROR ] Unreachable state, handle me better"),
             }
-            curr_state = new_state;
+            curr_state = goto_state;
         }
+    }
+
+    // Little helper function to avoid repeating code when writing the symbol table
+    // TODO: Error handling in the case where we have trouble writing to the file
+    fn write_token(mut file: &File, name: &str, class: &str, addr: &u32) {
+        file.write_fmt(format_args!(
+            "{:<6} {:<10} {:<5} {:<7} {}\n",
+            name, class, "", addr, "CS"
+        ))
+        .ok();
+    }
+
+    // Using a predefined state table located in a file to perform row col look up
+    // determining our current state
+    fn table_lookup(state: usize, col: usize, fsa: &str) -> usize {
+        let table = fs::File::open("src/compiler/".to_owned() + fsa)
+            .expect("[ ERROR ] Something went wrong reading the file.");
+
+        let file_reader = io::BufReader::new(table).lines().nth(state).unwrap();
+        if let Ok(goto) = file_reader {
+            return goto
+                .split(' ')
+                .collect::<Vec<&str>>()
+                .into_iter()
+                .nth(col)
+                .unwrap()
+                .parse::<usize>()
+                .unwrap();
+        }
+        999
     }
 }
 
+// NOTE: The great thing about the From<T> for U trait is that we get the opposite type conversion "for
+// free" as well. IE Into<U> for T
 impl From<TokenClass> for usize {
     fn from(class: TokenClass) -> usize {
         match class {
-            TokenClass::ReservedWord(r) => {
-                match r {
-                    ReservedWords::Class => 0,
-                    ReservedWords::Const => 1,
-                    ReservedWords::Var => 2,
-                }
-            }
-            TokenClass::Identifier(i) => {
-                match i {
-                    Identifiers::Identifier => 3,
-                }
-            }
-            TokenClass::Literal(l) => {
-                match l {
-                    Literals::Integer => 4,
-                }
-            }
-            TokenClass::Op(o) => {
-                match o {
-                    Ops::Mop => 7,
-                    Ops::Addop => 8,
-                    Ops::Assignment => 9,
-                }
-            }
-            TokenClass::Delimiter(d) => {
-                match d {
-                    Delimiters::OpenBracket => 5,
-                    Delimiters::CloseBracket => 6,
-                    Delimiters::Semi => 10,
-                    Delimiters::Comma => 11,
-                }
-            }
+            TokenClass::ReservedWord(r) => match r {
+                ReservedWords::Class => 0,
+                ReservedWords::Const => 1,
+                ReservedWords::Var => 2,
+            },
+            TokenClass::Identifier(i) => match i {
+                Identifiers::Identifier => 3,
+            },
+            TokenClass::Literal(l) => match l {
+                Literals::Integer => 4,
+            },
+            TokenClass::Op(o) => match o {
+                Ops::Mop => 7,
+                Ops::Addop => 8,
+                Ops::Assignment => 9,
+            },
+            TokenClass::Delimiter(d) => match d {
+                Delimiters::OpenBracket => 5,
+                Delimiters::CloseBracket => 6,
+                Delimiters::Semi => 10,
+                Delimiters::Comma => 11,
+            },
         }
     }
 }
 
-impl From<Terminals> for usize {
-    fn from(t: Terminals) -> usize {
+impl From<Terminal> for usize {
+    fn from(t: Terminal) -> usize {
         match t {
-            Terminals::Letter => 0,
-            Terminals::Digit => 1,
-            Terminals::OpenBracket => 2,
-            Terminals::CloseBracket => 3,
-            Terminals::Mult => 4,
-            Terminals::Add => 5,
-            Terminals::Equal => 6,
-            Terminals::Semi => 7,
-            Terminals::Comma => 8,
-            Terminals::Slash => 9,
-            Terminals::Whitespace => 10,
-            Terminals::Minus => 11,
-            Terminals::Unknown => 12,
+            Terminal::Letter => 0,
+            Terminal::Digit => 1,
+            Terminal::OpenBracket => 2,
+            Terminal::CloseBracket => 3,
+            Terminal::Mult => 4,
+            Terminal::Add => 5,
+            Terminal::Equal => 6,
+            Terminal::Semi => 7,
+            Terminal::Comma => 8,
+            Terminal::Slash => 9,
+            Terminal::Whitespace => 10,
+            Terminal::Minus => 11,
+            Terminal::Unknown => 12,
         }
     }
 }
 
-impl From<&char> for Terminals {
-    fn from(ch: &char) -> Terminals {
+impl From<&char> for Terminal {
+    fn from(ch: &char) -> Terminal {
         match ch {
-            c if c.is_alphabetic() => Terminals::Letter,
+            c if c.is_alphabetic() => Terminal::Letter,
 
-            c if c.is_digit(10) => Terminals::Digit,
+            c if c.is_digit(10) => Terminal::Digit,
 
-            character if character.is_whitespace() => Terminals::Whitespace,
+            character if character.is_whitespace() => Terminal::Whitespace,
 
-            '{' => Terminals::OpenBracket,
-            '}' => Terminals::CloseBracket,
-            ';' => Terminals::Semi,
-            '+' => Terminals::Add,
-            '*' => Terminals::Mult,
-            '/' => Terminals::Slash,
-            ',' => Terminals::Comma,
-            '=' => Terminals::Equal,
-            '-' => Terminals::Minus,
+            '{' => Terminal::OpenBracket,
+            '}' => Terminal::CloseBracket,
+            ';' => Terminal::Semi,
+            '+' => Terminal::Add,
+            '*' => Terminal::Mult,
+            '/' => Terminal::Slash,
+            ',' => Terminal::Comma,
+            '=' => Terminal::Equal,
+            '-' => Terminal::Minus,
 
-            _ => Terminals::Unknown
+            _ => Terminal::Unknown,
         }
     }
 }
@@ -240,10 +262,10 @@ impl Iterator for Tokenize {
     fn next(&mut self) -> Option<Self::Item> {
         let mut token = Token {
             name: String::from(""),
-            class: None 
+            class: None,
         };
 
-        let mut curr_state: i32 = 0;
+        let mut curr_state: usize = 0;
 
         loop {
             let character: char;
@@ -257,29 +279,29 @@ impl Iterator for Tokenize {
             }
 
             // Check what terminal we have
-            let terminal: Terminals = Terminals::from(&character);
+            let terminal = Terminal::from(&character);
 
-            curr_state = self.fsa[curr_state as usize][usize::from(terminal)];
+            curr_state = Tokenize::table_lookup(curr_state, usize::from(terminal), "scanner_fsa");
             match curr_state {
                 // Ignoring whitespace and any comment strings
                 0 | 14 | 15 => {
                     token.name.clear();
                 }
 
-                1  => {
+                1 => {
                     token.name.push(character);
 
                     // Handling the case where we find a delimiter after a letter
-                    let peeked = self.characters.peek().unwrap(); 
-                    match Terminals::from(peeked) {
-                        Terminals::Letter => continue,
-                        Terminals::Digit => continue,
+                    let peeked = self.characters.peek().unwrap();
+                    match Terminal::from(peeked) {
+                        Terminal::Letter => continue,
+                        Terminal::Digit => continue,
                         _ => {
-                            if terminal == Terminals::Letter {
+                            if terminal == Terminal::Letter {
                                 token.class = Some(TokenClass::Identifier(Identifiers::Identifier));
                                 break;
                             }
-                        },
+                        }
                     }
                 }
 
@@ -287,19 +309,19 @@ impl Iterator for Tokenize {
                     token.name.push(character);
 
                     // Handling the case where we find a delimiter after a digit
-                    let peeked = self.characters.peek().unwrap(); 
-                    match Terminals::from(peeked){
-                        Terminals::Letter => continue,
-                        Terminals::Digit => continue,
+                    let peeked = self.characters.peek().unwrap();
+                    match Terminal::from(peeked) {
+                        Terminal::Letter => continue,
+                        Terminal::Digit => continue,
                         _ => {
-                            if terminal == Terminals::Digit {
+                            if terminal == Terminal::Digit {
                                 token.class = Some(TokenClass::Literal(Literals::Integer));
                                 break;
                             }
-                        },
+                        }
                     }
                 }
-                
+
                 // Hit final letter/digit, break, attach correct class and send out token
                 2 => {
                     token.class = Some(TokenClass::Identifier(Identifiers::Identifier));
@@ -323,31 +345,31 @@ impl Iterator for Tokenize {
                     token.class = Some(TokenClass::Delimiter(Delimiters::CloseBracket));
                     break;
                 }
-                
+
                 7 => {
                     token.name.push(character);
                     token.class = Some(TokenClass::Op(Ops::Mop));
                     break;
                 }
-                
+
                 8 => {
                     token.name.push(character);
                     token.class = Some(TokenClass::Op(Ops::Addop));
                     break;
                 }
-                
+
                 9 => {
                     token.name.push(character);
                     token.class = Some(TokenClass::Op(Ops::Assignment));
                     break;
                 }
-                
+
                 10 => {
                     token.name.push(character);
                     token.class = Some(TokenClass::Delimiter(Delimiters::Semi));
                     break;
                 }
-                
+
                 11 => {
                     token.name.push(character);
                     token.class = Some(TokenClass::Delimiter(Delimiters::Comma));
@@ -376,9 +398,9 @@ impl Iterator for Tokenize {
                     }
 
                     // TODO: This is where we will handle division later on.
-                    match Terminals::from(peeked) {
-                        Terminals::Mult => continue,
-                        Terminals::Slash => continue,
+                    match Terminal::from(peeked) {
+                        Terminal::Mult => continue,
+                        Terminal::Slash => continue,
                         _ => break,
                     }
                 }
@@ -392,10 +414,10 @@ impl Iterator for Tokenize {
         // Checking if our current token is one of our reserved words and changing its token class
         // to match before sending the token out
         match token.name.as_str() {
-                "CLASS" => token.class = Some(TokenClass::ReservedWord(ReservedWords::Class)),
-                "CONST" => token.class = Some(TokenClass::ReservedWord(ReservedWords::Const)),
-                "VAR" => token.class = Some(TokenClass::ReservedWord(ReservedWords::Var)),
-                _ => {},
+            "CLASS" => token.class = Some(TokenClass::ReservedWord(ReservedWords::Class)),
+            "CONST" => token.class = Some(TokenClass::ReservedWord(ReservedWords::Const)),
+            "VAR" => token.class = Some(TokenClass::ReservedWord(ReservedWords::Var)),
+            _ => {}
         }
 
         // Send out token wrapped in option. Will return None to detonte end of Iter

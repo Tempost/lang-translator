@@ -141,6 +141,10 @@ impl Tokenize {
                     debug_print_kek(&curr_state, &token.name, true)
                 }
 
+                12 => {
+                    todo!()
+                }
+
                 _ => panic!("[ ERROR ] Unreachable state, handle me better"),
             }
             curr_state = goto_state;

@@ -142,7 +142,8 @@ impl Tokenize {
                 }
 
                 12 => {
-                    todo!()
+                    // End of program, quit out if still running through tokens for some reason
+                    break;
                 }
 
                 _ => panic!("[ ERROR ] Unreachable state, handle me better"),

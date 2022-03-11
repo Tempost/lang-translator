@@ -99,7 +99,7 @@ impl Tokenize {
         // Make our token iterator peekable
         let mut peek_self = self.peekable();
         let mut curr_state: usize = 0;
-        let mut goto_state: usize = 0; 
+        let mut goto_state: usize; 
         let mut addr: u32 = 0;
 
         file.write_fmt(format_args!(

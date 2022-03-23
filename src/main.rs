@@ -1,6 +1,5 @@
 mod compiler;
-
-use crate::compiler::lexanalysis::Tokenize;
+use crate::compiler::lexical::*;
 
 fn main() {
 

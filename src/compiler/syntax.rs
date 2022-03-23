@@ -1,8 +1,9 @@
 use std::fmt;
 use std::error::Error;
+use precedence::*;
 
 // Take tokens from lex portion of the code
-use crate::compiler::lexanalysis::{Token, TokenClass, Tokenize};
+use crate::compiler::lexical::{Token, TokenClass, Tokenize};
 
 
 type TokenList = Vec<Token>;
@@ -51,6 +52,8 @@ impl<'a> fmt::Display for SyntaxError<'a> {
     }
 }
 
+const RESERVED_WORDS: [&str; 10] = ["CONST", "IF", "VAR", "THEN", "PROCEDURE", "WHILE", "CALL", "DO", "ODD", "CLASS"];
+
 impl Syntax {
     fn new() -> Self {
         Syntax {
@@ -78,11 +81,11 @@ impl Syntax {
         // Determine what to do based on output of the compare, IE contuine pushing to the PDA
         // stack, or reduce to a new handle(syntax class). Contuine until no more tokens 
         
-        let mut iter = self.tokens.iter();
+        let mut iter = self.tokens.iter().peekable();
+        let mut curr_index = 0;
         let mut op_index = 0;
 
         while let Some(token) = iter.next() {
-            pda.push(token);
         }
 
         Ok(())

@@ -22,7 +22,6 @@ pub enum Terminal {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TokenClass {
-    ReservedWord,
     Identifier,
     Literal,
     Delimiter,
@@ -156,11 +155,10 @@ impl Tokenize {
 impl From<TokenClass> for usize {
     fn from(class: TokenClass) -> usize {
         match class {
-            TokenClass::ReservedWord => 0,
-            TokenClass::Identifier => 1,
-            TokenClass::Literal => 2,
-            TokenClass::Delimiter => 3,
-            TokenClass::Op => 4,
+            TokenClass::Identifier => 0,
+            TokenClass::Literal => 1,
+            TokenClass::Delimiter => 2,
+            TokenClass::Op => 3,
         }
     }
 }

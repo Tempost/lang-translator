@@ -1,2 +1,3 @@
 pub mod lexanalysis;
-pub mod syntaxanalysis;
+pub mod syntax;
+pub mod digraph;

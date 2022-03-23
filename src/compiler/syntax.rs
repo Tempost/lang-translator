@@ -82,9 +82,6 @@ impl Syntax {
         let mut op_index = 0;
 
         while let Some(token) = iter.next() {
-            if token.class.unwrap() != TokenClass::ReservedWord(Class) {
-
-            }
             pda.push(token);
         }
 

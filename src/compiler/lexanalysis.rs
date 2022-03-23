@@ -22,43 +22,11 @@ pub enum Terminal {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TokenClass {
-    ReservedWord(ReservedWords),
-    Identifier(Identifiers),
-    Literal(Literals),
-    Delimiter(Delimiters),
-    Op(Ops),
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum ReservedWords {
-    Class,
-    Const,
-    Var,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum Identifiers {
+    ReservedWord,
     Identifier,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum Literals {
-    Integer,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum Delimiters {
-    OpenBracket,
-    CloseBracket,
-    Semi,
-    Comma,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum Ops {
-    Mop,
-    Addop,
-    Assignment,
+    Literal,
+    Delimiter,
+    Op,
 }
 
 pub struct Token {
@@ -188,28 +156,11 @@ impl Tokenize {
 impl From<TokenClass> for usize {
     fn from(class: TokenClass) -> usize {
         match class {
-            TokenClass::ReservedWord(r) => match r {
-                ReservedWords::Class => 0,
-                ReservedWords::Const => 1,
-                ReservedWords::Var => 2,
-            },
-            TokenClass::Identifier(i) => match i {
-                Identifiers::Identifier => 3,
-            },
-            TokenClass::Literal(l) => match l {
-                Literals::Integer => 4,
-            },
-            TokenClass::Op(o) => match o {
-                Ops::Mop => 7,
-                Ops::Addop => 8,
-                Ops::Assignment => 9,
-            },
-            TokenClass::Delimiter(d) => match d {
-                Delimiters::OpenBracket => 5,
-                Delimiters::CloseBracket => 6,
-                Delimiters::Semi => 10,
-                Delimiters::Comma => 11,
-            },
+            TokenClass::ReservedWord => 0,
+            TokenClass::Identifier => 1,
+            TokenClass::Literal => 2,
+            TokenClass::Delimiter => 3,
+            TokenClass::Op => 4,
         }
     }
 }
@@ -303,7 +254,7 @@ impl Iterator for Tokenize {
                         Terminal::Digit => continue,
                         _ => {
                             if terminal == Terminal::Letter {
-                                token.class = Some(TokenClass::Identifier(Identifiers::Identifier));
+                                token.class = Some(TokenClass::Identifier);
                                 break;
                             }
                         }
@@ -320,7 +271,7 @@ impl Iterator for Tokenize {
                         Terminal::Digit => continue,
                         _ => {
                             if terminal == Terminal::Digit {
-                                token.class = Some(TokenClass::Literal(Literals::Integer));
+                                token.class = Some(TokenClass::Literal);
                                 break;
                             }
                         }
@@ -329,67 +280,67 @@ impl Iterator for Tokenize {
 
                 // Hit final letter/digit, break, attach correct class and send out token
                 2 => {
-                    token.class = Some(TokenClass::Identifier(Identifiers::Identifier));
+                    token.class = Some(TokenClass::Identifier);
                     break;
                 }
 
                 4 => {
-                    token.class = Some(TokenClass::Literal(Literals::Integer));
+                    token.class = Some(TokenClass::Literal);
                     break;
                 }
 
                 // Single branch from starting state, break and send out the token
                 5 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Delimiter(Delimiters::OpenBracket));
+                    token.class = Some(TokenClass::Delimiter);
                     break;
                 }
 
                 6 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Delimiter(Delimiters::CloseBracket));
+                    token.class = Some(TokenClass::Delimiter);
                     break;
                 }
 
                 7 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Op(Ops::Mop));
+                    token.class = Some(TokenClass::Op);
                     break;
                 }
 
                 8 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Op(Ops::Addop));
+                    token.class = Some(TokenClass::Op);
                     break;
                 }
 
                 9 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Op(Ops::Assignment));
+                    token.class = Some(TokenClass::Op);
                     break;
                 }
 
                 10 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Delimiter(Delimiters::Semi));
+                    token.class = Some(TokenClass::Delimiter);
                     break;
                 }
 
                 11 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Delimiter(Delimiters::Comma));
+                    token.class = Some(TokenClass::Delimiter);
                     break;
                 }
 
                 13 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Op(Ops::Mop));
+                    token.class = Some(TokenClass::Op);
                     break;
                 }
 
                 16 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Op(Ops::Addop));
+                    token.class = Some(TokenClass::Op);
                     break;
                 }
 
@@ -414,15 +365,6 @@ impl Iterator for Tokenize {
                 // proper error handling
                 _ => panic!("[ ERROR ] Unreachable state, handle me better"),
             }
-        }
-
-        // Checking if our current token is one of our reserved words and changing its token class
-        // to match before sending the token out
-        match token.name.as_str() {
-            "CLASS" => token.class = Some(TokenClass::ReservedWord(ReservedWords::Class)),
-            "CONST" => token.class = Some(TokenClass::ReservedWord(ReservedWords::Const)),
-            "VAR" => token.class = Some(TokenClass::ReservedWord(ReservedWords::Var)),
-            _ => {}
         }
 
         // Send out token wrapped in option. Will return None to detonte end of Iter

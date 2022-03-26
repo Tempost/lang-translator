@@ -1,10 +1,9 @@
 use std::fmt;
 use std::error::Error;
-use precedence::*;
+use precedence::{PrecedenceGrammar, OPG};
 
 // Take tokens from lex portion of the code
 use crate::compiler::lexical::{Token, TokenClass, Tokenize};
-
 
 type TokenList = Vec<Token>;
 type TokenListRef<'a> = Vec<&'a Token>;
@@ -142,4 +141,13 @@ mod test {
         }
     }
 
+    #[test]
+    fn two() {
+        let mut grammar = OPG::new();
+        grammar.parse_input(false, "tables");
+
+        grammar.shrink_precedence();
+        
+        println!("f:{:?} \n g:{:?}", grammar.f, grammar.g);
+    }
 }

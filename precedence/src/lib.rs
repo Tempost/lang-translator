@@ -1,17 +1,17 @@
-use std::io::{self, BufRead};
+use std::io::{ BufRead, BufReader };
+use std::fs::File;
 
-mod boolean;
+use matrixmath::{self, Matrix};
 
-use crate::boolean::matrix::{self, Matrix};
-
-trait PrecedenceGrammar {
+pub trait PrecedenceGrammar {
     fn new() -> Self;
-    fn parse_input(&mut self, compute_handles: bool);
+    fn parse_input(&mut self, compute_handles: bool, filename: &str);
     fn shrink_precedence(&mut self);
     fn compute_handles(&mut self);
+    fn create_b_matrix(&mut self);
 }
 
-struct OPG {
+pub struct OPG {
     first: Matrix,
     first_term: Matrix,
     last: Matrix,
@@ -20,51 +20,21 @@ struct OPG {
     yields: Matrix,
     equal: Matrix,
     rtc: Matrix,
-    f: Vec<i32>,
-    g: Vec<i32>,
+    pub f: Vec<i32>,
+    pub g: Vec<i32>,
     m_dimension: usize,
 }
 
-struct SPG {
+pub struct SPG {
     first: Matrix,
     last: Matrix,
     takes: Matrix,
     yields: Matrix,
     equal: Matrix,
     rtc: Matrix,
-    f: Vec<i32>,
-    g: Vec<i32>,
+    pub f: Vec<i32>,
+    pub g: Vec<i32>,
     m_dimension: usize,
-}
-
-impl OPG {
-    // NOTE: take the (<=) matrix and add to pos [0][7] through pos [7][15]
-    // also take (>=)T matrix and add to pos [8][0] through pos [15][7]
-    // to create the B matrix
-    fn create_b_matrix(&self) -> Matrix{
-        let b_matrix_len = self.m_dimension * 2;
-        let mut b_matrix: Matrix = vec![vec![false; b_matrix_len]; b_matrix_len]; 
-
-        let takes_equal = matrix::combine_matrix(&self.takes, &self.equal);
-        let yields_equal = matrix::combine_matrix(&self.yields, &self.equal);
-
-        // Shadowing takes_equal to perform the transpose
-        let takes_equal = matrix::transpose(&takes_equal);
-
-        for row in 0..b_matrix_len {
-            for col in 0..b_matrix_len {
-                if row < (b_matrix_len / 2) && col >= (b_matrix_len / 2) {
-                    b_matrix[row][col] = yields_equal[row][col % (self.m_dimension)];
-                }
-
-                if row >= (b_matrix_len / 2) && col < (b_matrix_len / 2){
-                    b_matrix[row][col] = takes_equal[row % (self.m_dimension)][col % (self.m_dimension)];
-                }
-            }
-        }
-
-        b_matrix
-    }
 }
 
 impl PrecedenceGrammar for OPG {
@@ -84,20 +54,21 @@ impl PrecedenceGrammar for OPG {
         }
     }
 
-    fn parse_input(&mut self, compute_handles: bool) {
-        let in_handle = io::stdin();
-        let mut lines = in_handle.lock().lines();
+    fn parse_input(&mut self, compute_handles: bool, filename: &str) {
+        let file = File::open(filename).expect("No such file.");
+        let file = BufReader::new(file);
+        let mut lines = file.lines();
+
 
         let mut matrix: Matrix = Vec::new();
-        let mut count: i32 = 0;
         while let Some(line) = lines.next() {
-            let line_ref = line.unwrap();
+            let matrix_dim = line.unwrap();
 
-            if line_ref.is_empty() {
+            if matrix_dim.is_empty() {
                 continue;
             }
 
-            let mut m_size = line_ref.split(' ');
+            let mut m_size = matrix_dim.split(' ');
 
             let (x, y) = (
                 m_size.next().unwrap().parse::<i32>().ok().unwrap(),
@@ -109,6 +80,7 @@ impl PrecedenceGrammar for OPG {
             }
 
             self.m_dimension = x as usize;
+            let matrix_name: &str = &lines.next().unwrap().ok().unwrap().to_lowercase();
 
             for _ in 0..x {
                 matrix.push(
@@ -128,31 +100,29 @@ impl PrecedenceGrammar for OPG {
                         .collect::<Vec<bool>>(),
                 );
             }
-           
             if compute_handles {
-                match count {
-                    0 => self.first = matrix.clone(),
-                    1 => self.first_term = matrix.clone(),
-                    2 => self.last = matrix.clone(),
-                    3 => self.last_term = matrix.clone(),
-                    4 => self.equal = matrix.clone(),
+                match matrix_name {
+                    "first" => self.first = matrix.clone(),
+                    "first term" => self.first_term = matrix.clone(),
+                    "last" => self.last = matrix.clone(),
+                    "last term" => self.last_term = matrix.clone(),
+                    "equal" => self.equal = matrix.clone(),
                     _ => panic!("[ ERROR ] Included too many matrices in input."),
                 }
             } else {
-                match count {
-                    0 => self.takes = matrix.clone(),
-                    1 => self.yields = matrix.clone(),
-                    2 => self.equal = matrix.clone(),
+                match matrix_name {
+                    "yields" => self.yields = matrix.clone(),
+                    "takes" => self.takes = matrix.clone(),
+                    "equal" => self.equal = matrix.clone(),
                     _ => panic!("[ ERROR ] Included too many matrices in input."),
                 }
             }
-
             matrix.clear();
-            count += 1;
         }
     }
 
     fn shrink_precedence(&mut self) {
+        self.create_b_matrix();
         let length = self.rtc.len();
 
         let mut count = 0;
@@ -182,21 +152,49 @@ impl PrecedenceGrammar for OPG {
     fn compute_handles(&mut self) {
         let mut final_handle: Matrix;
 
-        let first_p = matrix::transitive_closure(&self.first);
-        let identity = matrix::create_identity(10); 
-        let first_s = matrix::sum(&identity, &first_p);
+        let first_p = matrixmath::transitive_closure(&self.first);
+        let identity = matrixmath::create_identity(self.m_dimension); 
+        let first_s = matrixmath::sum(&identity, &first_p);
         
-        final_handle = matrix::product(&self.equal, &first_s);
-        final_handle = matrix::product(&final_handle, &self.first_term);
-        self.takes = final_handle.clone();
+        final_handle = matrixmath::product(&self.equal, &first_s);
+        final_handle = matrixmath::product(&final_handle, &self.first_term);
+        self.yields = final_handle.clone();
         final_handle.clear();
 
-        let last_p = matrix::transitive_closure(&self.last);
-        let last_s = matrix::sum(&identity, &last_p);
-        final_handle = matrix::product(&last_s, &self.last_term);
-        final_handle = matrix::transpose(&final_handle);
-        final_handle = matrix::product(&final_handle, &self.equal);
-        self.yields = final_handle.clone();
+        let last_p = matrixmath::transitive_closure(&self.last);
+        let last_s = matrixmath::sum(&identity, &last_p);
+
+        final_handle = matrixmath::product(&last_s, &self.last_term);
+        final_handle = matrixmath::transpose(&final_handle);
+        final_handle = matrixmath::product(&final_handle, &self.equal);
+        self.takes = final_handle.clone();
+    }
+
+    fn create_b_matrix(&mut self) {
+        let b_matrix_len = self.m_dimension * 2;
+        let mut b_matrix: Matrix = vec![vec![false; b_matrix_len]; b_matrix_len]; 
+
+        let takes_equal = matrixmath::combine_matrix(&self.takes, &self.equal);
+        let yields_equal = matrixmath::combine_matrix(&self.yields, &self.equal);
+
+        let takes_equal = matrixmath::transpose(&takes_equal);
+
+        for row in 0..b_matrix_len {
+            for col in 0..b_matrix_len {
+                if row < (b_matrix_len / 2) && col >= (b_matrix_len / 2) {
+                    b_matrix[row][col] = yields_equal[row][col % (self.m_dimension)];
+                }
+
+                if row >= (b_matrix_len / 2) && col < (b_matrix_len / 2){
+                    b_matrix[row][col] = takes_equal[row % (self.m_dimension)][col % (self.m_dimension)];
+                }
+            }
+        }
+
+        let identity = matrixmath::create_identity(b_matrix_len); 
+        b_matrix = matrixmath::transitive_closure(&b_matrix);
+        b_matrix = matrixmath::sum(&b_matrix, &identity); 
+        self.rtc = b_matrix;
     }
 }
 
@@ -215,20 +213,20 @@ impl PrecedenceGrammar for SPG {
         }
     }
 
-    fn parse_input(&mut self, compute_handles: bool) {
-        let in_handle = io::stdin();
-        let mut lines = in_handle.lock().lines();
+    fn parse_input(&mut self, compute_handles: bool, filename: &str) {
+        let file = File::open(filename).unwrap();
+        let file = BufReader::new(file);
+        let mut lines = file.lines();
 
         let mut matrix: Matrix = Vec::new();
-        let mut count: i32 = 0;
         while let Some(line) = lines.next() {
-            let line_ref = line.unwrap();
+            let matrix_dim = line.unwrap();
 
-            if line_ref.is_empty() {
+            if matrix_dim.is_empty() {
                 continue;
             }
 
-            let mut m_size = line_ref.split(' ');
+            let mut m_size = matrix_dim.split(' ');
 
             let (x, y) = (
                 m_size.next().unwrap().parse::<i32>().ok().unwrap(),
@@ -241,6 +239,8 @@ impl PrecedenceGrammar for SPG {
 
             self.m_dimension = x as usize;
 
+            let matrix_name: &str = &lines.next().unwrap().ok().unwrap().to_lowercase();
+            
             for _ in 0..x {
                 matrix.push(
                     lines
@@ -259,27 +259,28 @@ impl PrecedenceGrammar for SPG {
                         .collect::<Vec<bool>>(),
                 );
             }
+
             if compute_handles {
-                match count {
-                    0 => self.first = matrix.clone(),
-                    1 => self.last = matrix.clone(),
-                    2 => self.equal = matrix.clone(),
+                match matrix_name {
+                    "first" => self.first = matrix.clone(),
+                    "last" => self.last = matrix.clone(),
+                    "equal" => self.equal = matrix.clone(),
                     _ => panic!("[ ERROR ] Included too many matrices in input."),
                 }
             } else {
-                match count {
-                    0 => self.takes = matrix.clone(),
-                    1 => self.yields = matrix.clone(),
-                    2 => self.equal = matrix.clone(),
+                match matrix_name {
+                    "yields" => self.yields = matrix.clone(),
+                    "takes" => self.takes = matrix.clone(),
+                    "equal" => self.equal = matrix.clone(),
                     _ => panic!("[ ERROR ] Included too many matrices in input."),
                 }
             }
             matrix.clear();
-            count += 1;
         }
     } 
 
     fn shrink_precedence(&mut self) {
+        self.create_b_matrix();
         let length = self.rtc.len();
 
         let mut count = 0;
@@ -309,23 +310,50 @@ impl PrecedenceGrammar for SPG {
     fn compute_handles(&mut self) {
         let mut final_handle: Matrix;
 
-        let first_p = matrix::transitive_closure(&self.first);
+        let first_p = matrixmath::transitive_closure(&self.first);
 
-        final_handle = matrix::product(&self.equal, &first_p);
+        final_handle = matrixmath::product(&self.equal, &first_p);
 
-        self.takes = final_handle.clone();
+        self.yields = final_handle.clone();
         final_handle.clear();
 
 
-        let last_p = matrix::transitive_closure(&self.last);
-        let identity = matrix::create_identity(10);
+        let last_p = matrixmath::transitive_closure(&self.last);
+        let identity = matrixmath::create_identity(self.m_dimension);
 
-        let first_s = matrix::sum(&identity, &first_p);
-        let transpose = matrix::transpose(&last_p);
+        let first_s = matrixmath::sum(&identity, &first_p);
+        let transpose = matrixmath::transpose(&last_p);
 
-        final_handle = matrix::product(&transpose, &self.equal);
-        final_handle = matrix::product(&final_handle, &first_s);
+        final_handle = matrixmath::product(&transpose, &self.equal);
+        final_handle = matrixmath::product(&final_handle, &first_s);
 
-        self.yields = final_handle.clone();
+        self.takes = final_handle.clone();
+    }
+
+    fn create_b_matrix(&mut self) {
+        let b_matrix_len = self.m_dimension * 2;
+        let mut b_matrix: Matrix = vec![vec![false; b_matrix_len]; b_matrix_len]; 
+
+        let takes_equal = matrixmath::combine_matrix(&self.takes, &self.equal);
+        let yields_equal = matrixmath::combine_matrix(&self.yields, &self.equal);
+
+        let yields_equal = matrixmath::transpose(&yields_equal);
+
+        for row in 0..b_matrix_len {
+            for col in 0..b_matrix_len {
+                if row < (b_matrix_len / 2) && col >= (b_matrix_len / 2) {
+                    b_matrix[row][col] = takes_equal[row][col % (self.m_dimension)];
+                }
+
+                if row >= (b_matrix_len / 2) && col < (b_matrix_len / 2){
+                    b_matrix[row][col] = yields_equal[row % (self.m_dimension)][col % (self.m_dimension)];
+                }
+            }
+        }
+
+        let identity = matrixmath::create_identity(b_matrix_len); 
+        b_matrix = matrixmath::transitive_closure(&b_matrix);
+        b_matrix = matrixmath::sum(&b_matrix, &identity); 
+        self.rtc = b_matrix;
     }
 }

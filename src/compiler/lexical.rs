@@ -26,11 +26,13 @@ pub enum TokenClass {
     Literal,
     Delimiter,
     Op,
+    Unknown,
 }
 
+#[derive(Debug)]
 pub struct Token {
     pub name: String,
-    pub class: Option<TokenClass>,
+    pub class: TokenClass,
 }
 
 pub struct Tokenize {
@@ -66,7 +68,7 @@ impl Tokenize {
         // Make our token iterator peekable
         let mut peek_self = self.peekable();
         let mut curr_state: usize = 0;
-        let mut goto_state: usize; 
+        let mut goto_state: usize;
         let mut addr: u32 = 0;
 
         file.write_fmt(format_args!(
@@ -76,8 +78,8 @@ impl Tokenize {
         .ok();
 
         while let Some(token) = peek_self.next() {
-            goto_state = 
-                Tokenize::table_lookup(curr_state, usize::from(token.class.unwrap()), "symbol_fsa");
+            goto_state =
+                Tokenize::table_lookup(curr_state, usize::from(token.class), "symbol_fsa");
 
             match goto_state {
                 0 | 1 | 3 | 4 | 6 | 7 | 8 | 10 => debug_print_kek(&curr_state, &token.name, false),
@@ -90,7 +92,7 @@ impl Tokenize {
                 5 => {
                     Tokenize::write_token(&mut file, &token.name, "Constvar", &addr);
 
-                    addr += 2; 
+                    addr += 2;
                     debug_print_kek(&curr_state, &token.name, true)
                 }
 
@@ -159,6 +161,7 @@ impl From<TokenClass> for usize {
             TokenClass::Literal => 1,
             TokenClass::Delimiter => 2,
             TokenClass::Op => 3,
+            TokenClass::Unknown => panic!("[ Error ] Cannot index unknown Token Class.")
         }
     }
 }
@@ -216,7 +219,7 @@ impl Iterator for Tokenize {
     fn next(&mut self) -> Option<Self::Item> {
         let mut token = Token {
             name: String::from(""),
-            class: None,
+            class: TokenClass::Unknown,
         };
 
         let mut curr_state: usize = 0;
@@ -252,7 +255,7 @@ impl Iterator for Tokenize {
                         Terminal::Digit => continue,
                         _ => {
                             if terminal == Terminal::Letter {
-                                token.class = Some(TokenClass::Identifier);
+                                token.class = TokenClass::Identifier;
                                 break;
                             }
                         }
@@ -269,7 +272,7 @@ impl Iterator for Tokenize {
                         Terminal::Digit => continue,
                         _ => {
                             if terminal == Terminal::Digit {
-                                token.class = Some(TokenClass::Literal);
+                                token.class = TokenClass::Literal;
                                 break;
                             }
                         }
@@ -278,67 +281,67 @@ impl Iterator for Tokenize {
 
                 // Hit final letter/digit, break, attach correct class and send out token
                 2 => {
-                    token.class = Some(TokenClass::Identifier);
+                    token.class = TokenClass::Identifier;
                     break;
                 }
 
                 4 => {
-                    token.class = Some(TokenClass::Literal);
+                    token.class = TokenClass::Literal;
                     break;
                 }
 
                 // Single branch from starting state, break and send out the token
                 5 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Delimiter);
+                    token.class = TokenClass::Delimiter;
                     break;
                 }
 
                 6 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Delimiter);
+                    token.class = TokenClass::Delimiter;
                     break;
                 }
 
                 7 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Op);
+                    token.class = TokenClass::Op;
                     break;
                 }
 
                 8 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Op);
+                    token.class = TokenClass::Op;
                     break;
                 }
 
                 9 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Op);
+                    token.class = TokenClass::Op;
                     break;
                 }
 
                 10 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Delimiter);
+                    token.class = TokenClass::Delimiter;
                     break;
                 }
 
                 11 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Delimiter);
+                    token.class = TokenClass::Delimiter;
                     break;
                 }
 
                 13 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Op);
+                    token.class = TokenClass::Op;
                     break;
                 }
 
                 16 => {
                     token.name.push(character);
-                    token.class = Some(TokenClass::Op);
+                    token.class = TokenClass::Op;
                     break;
                 }
 

@@ -5,17 +5,3 @@ version = 3
 [[package]]
 name = "lang-translator"
 version = "0.1.0"
-dependencies = [
- "precedence",
-]
-
-[[package]]
-name = "matrixmath"
-version = "0.1.0"
-
-[[package]]
-name = "precedence"
-version = "0.1.0"
-dependencies = [
- "matrixmath",
-]

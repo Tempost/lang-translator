@@ -3,7 +3,7 @@ use std::fmt;
 
 // Take tokens from lex portion of the code
 use crate::compiler::lexical::{Token, TokenClass, Tokenize};
-use crate::compiler::precedence::{Precedence, GrammarTable };
+use crate::compiler::precedence::{Precedence, TableIndex, GrammarTable };
 
 type TokenList = Vec<Token>;
 type TokenListRef<'a> = Vec<&'a Token>;
@@ -38,6 +38,14 @@ enum SyntaxClass {
 
 pub struct Syntax {
     tokens: TokenList,
+    pda_stack: Vec<Token>
+}
+
+struct Quads {
+    op: String,
+    var_one: String,
+    var_two: String,
+    var_three: String,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -70,7 +78,10 @@ const RESERVED_WORDS: [&str; 10] = [
 
 impl Syntax {
     fn new() -> Self {
-        Syntax { tokens: Vec::new() }
+        Syntax { 
+            tokens: Vec::new(),
+            pda_stack: Vec::new()
+        }
     }
 
     pub fn pda_stack_from_file(&mut self, file: &str) {
@@ -85,9 +96,7 @@ impl Syntax {
         }
     }
 
-    pub fn complete_analysis(&self) -> Result<()> {
-        // Err(SyntaxError(item.name.to_string(), &item.class.as_ref().unwrap()));
-        let mut pda: Vec<&Token> = Vec::new();
+    pub fn complete_analysis(&mut self) -> Result<()> {
         let grammar_rules = GrammarTable::new("table");
 
         // push token into PDA stack until a operator or reserved word is hit
@@ -95,96 +104,113 @@ impl Syntax {
         // Determine what to do based on output of the compare, IE contuine pushing to the PDA
         // stack, or reduce to a new handle(syntax class). Contuine until no more tokens
 
-        let mut iter = self.tokens.iter().peekable();
-        let mut curr_index = 0;
-        let mut prev_op_index = 0;
+        let mut iter = self.tokens.iter();
+        let mut prev_op = TableIndex::Nil;
 
         let empty_token = Token {
             name: String::from("Empty"),
             class: TokenClass::Delimiter 
         };
 
-        pda.push(&empty_token);
+        let mut handle_counter: usize = 0;
+        let mut handle_vec: Vec<usize> = Vec::new();
+
+        self.pda_stack.push(empty_token);
 
         while let Some(token) = iter.next() {
-            curr_index += 1;
+            println!("Items in handle: {}", handle_counter);
+ 
             match token.class {
                 TokenClass::Identifier if RESERVED_WORDS.contains(&token.name.as_str()) => {
-                    
-                    println!("Comparing precedence of {} and {}", pda[prev_op_index].name, token.name);
+                    println!("comparing precedence of {:?} and {:?}", prev_op, TableIndex::from(&token.name));
 
-                    match grammar_rules.lookup_precedence(&pda[prev_op_index].name, &token.name) {
+                    match grammar_rules.lookup_precedence(prev_op, &token.name) {
                         Precedence::Yields => {
-                            println!("Yields... Pushing {} to the stack.\n", token.name);
-                            pda.push(token); 
+                            println!("Yields... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
+                            self.pda_stack.push(token.clone()); 
+                            handle_vec.push(handle_counter);
+                            handle_counter = 0;
                         }
 
-                        Precedence::Takes => println!("Reduction"),
+                        Precedence::Takes => {
+                            println!("Takes... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
+                            self.pda_stack.push(token.clone()); 
+                        },
                         
                         Precedence::Equal => {
-                            println!("Equal... Pushing {} to the stack.\n", token.name);
-                            pda.push(token)
+                            println!("Equal... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
+                            self.pda_stack.push(token.clone()); 
                         }
 
                         Precedence::Nil => return Err(SyntaxError(token.name.as_str(), &token.class)),
                     }
-                    prev_op_index = curr_index;
+                    prev_op = TableIndex::from(&token.name);
                 }
 
                 TokenClass::Delimiter => {
+                    println!("comparing precedence of {:?} and {:?}", prev_op, TableIndex::from(&token.name));
 
-                    println!("Comparing precedence of {} and {}", pda[prev_op_index].name, token.name);
-
-                    match grammar_rules.lookup_precedence(&pda[prev_op_index].name, &token.name) {
+                    match grammar_rules.lookup_precedence(prev_op, &token.name) {
                         Precedence::Yields => {
-                            println!("Yields... Pushing {} to the stack.\n", token.name);
-                            pda.push(token); 
+                            println!("Yields... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
+                            self.pda_stack.push(token.clone()); 
+                            handle_vec.push(handle_counter);
+                            handle_counter = 0;
                         }
 
-                        Precedence::Takes => println!(""),
+                        Precedence::Takes => {
+                            println!("Takes... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
+                            self.pda_stack.push(token.clone()); 
+                        },
+                        
                         Precedence::Equal => {
-                            println!("Equal... Pushing {} to the stack.\n", token.name);
-                            pda.push(token)
+                            println!("Equal... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
+                            self.pda_stack.push(token.clone()); 
                         }
+
                         Precedence::Nil => return Err(SyntaxError(token.name.as_str(), &token.class)),
                     }
-                    prev_op_index = curr_index;
+                    prev_op = TableIndex::from(&token.name);
                 }
 
                 TokenClass::Op => {
-                    println!("Comparing precedence of {} and {}", pda[prev_op_index].name, token.name);
+                    println!("comparing precedence of {:?} and {:?}", prev_op, TableIndex::from(&token.name));
 
-                    match grammar_rules.lookup_precedence(&pda[prev_op_index].name, &token.name) {
+                    match grammar_rules.lookup_precedence(prev_op, &token.name) {
                         Precedence::Yields => {
-                            println!("Yields... Pushing {} to the stack.\n", token.name);
-                            pda.push(token); 
+                            println!("Yields... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
+                            self.pda_stack.push(token.clone()); 
+                            handle_vec.push(handle_counter);
+                            handle_counter = 0;
                         }
 
-                        Precedence::Takes => println!("Reduction"),
+                        Precedence::Takes => {
+                            println!("Takes... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
+                            self.pda_stack.push(token.clone()); 
+                        },
+                        
                         Precedence::Equal => {
-                            println!("Equal... Pushing {} to the stack.\n", token.name);
-                            pda.push(token)
+                            println!("Equal... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
+                            self.pda_stack.push(token.clone()); 
                         }
+
                         Precedence::Nil => return Err(SyntaxError(token.name.as_str(), &token.class)),
                     }
-                    prev_op_index = curr_index;
-            
+                    prev_op = TableIndex::from(&token.name);
                 }
 
-                TokenClass::Identifier  => {
-                    println!("Pushing {} to the stack.\n", token.name);
-                    pda.push(token)
+                TokenClass::Identifier => {
+                    self.pda_stack.push(token.clone()); 
                 }
+
                 TokenClass::Literal => {
-                    println!("Pushing {} to the stack.\n", token.name);
-                    pda.push(token)
+                    self.pda_stack.push(token.clone()); 
                 }
 
                 TokenClass::Unknown => return Err(SyntaxError(token.name.as_str(), &token.class))
             }
-            println!("Curr Index: {}, Last Op Index: {}", curr_index, prev_op_index);
+            handle_counter += 1;
         }
-
         Ok(())
     }
 }
@@ -243,8 +269,5 @@ mod test {
     fn parse_works() {
         let grammar = GrammarTable::new("table");
         grammar.print_table();
-
-        let prez = grammar.lookup_precedence(&String::from("+"), &String::from("+"));
-        println!("{:?}", prez);
     }
 }

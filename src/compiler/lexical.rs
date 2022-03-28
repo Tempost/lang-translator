@@ -20,7 +20,7 @@ pub enum Terminal {
     Unknown,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TokenClass {
     Identifier,
     Literal,
@@ -29,7 +29,7 @@ pub enum TokenClass {
     Unknown,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
     pub name: String,
     pub class: TokenClass,

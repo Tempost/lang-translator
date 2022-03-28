@@ -12,7 +12,7 @@ pub enum Precedence {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum TableIndex {
+pub enum TableIndex {
     Nil,
     Assignment,
     Plus,
@@ -179,11 +179,10 @@ impl GrammarTable {
         grammar_table
     }
 
-    pub fn lookup_precedence(&self, op_one: &String, op_two: &String) -> Precedence {
-        let op_one_class = TableIndex::from(op_one);
-        let op_two_class = TableIndex::from(op_two);
+    pub fn lookup_precedence(&self, prev_op: TableIndex, curr_op: &String) -> Precedence {
+        let curr_op_class = TableIndex::from(curr_op);
 
-        self.table[usize::from(op_one_class)][usize::from(op_two_class)]
+        self.table[usize::from(prev_op)][usize::from(curr_op_class)]
     }
 
     pub fn print_table(&self) {

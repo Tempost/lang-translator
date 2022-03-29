@@ -135,6 +135,9 @@ impl Syntax {
                         Precedence::Takes => {
                             println!("Takes... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
                             self.pda_stack.push(token.clone()); 
+                            if let Some(v) = handle_vec.pop() {
+                                handle_counter = v;
+                            }
                         },
                         
                         Precedence::Equal => {
@@ -161,6 +164,9 @@ impl Syntax {
                         Precedence::Takes => {
                             println!("Takes... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
                             self.pda_stack.push(token.clone()); 
+                            if let Some(v) = handle_vec.pop() {
+                                handle_counter = v;
+                            }
                         },
                         
                         Precedence::Equal => {
@@ -187,6 +193,9 @@ impl Syntax {
                         Precedence::Takes => {
                             println!("Takes... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
                             self.pda_stack.push(token.clone()); 
+                            if let Some(v) = handle_vec.pop() {
+                                handle_counter = v;
+                            }
                         },
                         
                         Precedence::Equal => {

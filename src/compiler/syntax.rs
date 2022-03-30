@@ -112,14 +112,11 @@ impl Syntax {
             class: TokenClass::Delimiter 
         };
 
-        let mut handle_counter: usize = 0;
         let mut handle_vec: Vec<usize> = Vec::new();
 
         self.pda_stack.push(empty_token);
 
         while let Some(token) = iter.next() {
-            println!("Items in handle: {}", handle_counter);
- 
             match token.class {
                 TokenClass::Identifier if RESERVED_WORDS.contains(&token.name.as_str()) => {
                     println!("comparing precedence of {:?} and {:?}", prev_op, TableIndex::from(&token.name));
@@ -128,8 +125,6 @@ impl Syntax {
                         Precedence::Yields => {
                             println!("Yields... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
                             self.pda_stack.push(token.clone()); 
-                            handle_vec.push(handle_counter);
-                            handle_counter = 0;
                         }
 
                         Precedence::Takes => {
@@ -157,8 +152,6 @@ impl Syntax {
                         Precedence::Yields => {
                             println!("Yields... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
                             self.pda_stack.push(token.clone()); 
-                            handle_vec.push(handle_counter);
-                            handle_counter = 0;
                         }
 
                         Precedence::Takes => {
@@ -186,8 +179,6 @@ impl Syntax {
                         Precedence::Yields => {
                             println!("Yields... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
                             self.pda_stack.push(token.clone()); 
-                            handle_vec.push(handle_counter);
-                            handle_counter = 0;
                         }
 
                         Precedence::Takes => {
@@ -218,11 +209,11 @@ impl Syntax {
 
                 TokenClass::Unknown => return Err(SyntaxError(token.name.as_str(), &token.class))
             }
-            handle_counter += 1;
         }
         Ok(())
     }
 }
+
 
 #[cfg(test)]
 mod test {
@@ -248,18 +239,6 @@ mod test {
 
         let name = syn.tokens.first();
         assert_eq!(name.unwrap().name, String::from("CLASS"));
-    }
-
-    #[test]
-    fn error_reporting() {
-        let mut syn = Syntax::new();
-        syn.pda_stack_from_memory("program.java");
-
-        let good = syn.complete_analysis();
-        match good {
-            Ok(_) => println!("Make sure this errors out."),
-            Err(e) => println!("{}", e),
-        }
     }
 
     #[test]

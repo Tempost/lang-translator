@@ -112,7 +112,8 @@ impl Syntax {
             class: TokenClass::Delimiter 
         };
 
-        let mut handle_vec: Vec<usize> = Vec::new();
+        let mut handle: Vec<Vec<Token>> = Vec::new();
+        let mut curr_handle: Vec<Token> = Vec::new();
 
         self.pda_stack.push(empty_token);
 
@@ -130,9 +131,6 @@ impl Syntax {
                         Precedence::Takes => {
                             println!("Takes... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
                             self.pda_stack.push(token.clone()); 
-                            if let Some(v) = handle_vec.pop() {
-                                handle_counter = v;
-                            }
                         },
                         
                         Precedence::Equal => {
@@ -145,7 +143,7 @@ impl Syntax {
                     prev_op = TableIndex::from(&token.name);
                 }
 
-                TokenClass::Delimiter => {
+                TokenClass::Delimiter | TokenClass::Op => {
                     println!("comparing precedence of {:?} and {:?}", prev_op, TableIndex::from(&token.name));
 
                     match grammar_rules.lookup_precedence(prev_op, &token.name) {
@@ -157,36 +155,6 @@ impl Syntax {
                         Precedence::Takes => {
                             println!("Takes... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
                             self.pda_stack.push(token.clone()); 
-                            if let Some(v) = handle_vec.pop() {
-                                handle_counter = v;
-                            }
-                        },
-                        
-                        Precedence::Equal => {
-                            println!("Equal... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
-                            self.pda_stack.push(token.clone()); 
-                        }
-
-                        Precedence::Nil => return Err(SyntaxError(token.name.as_str(), &token.class)),
-                    }
-                    prev_op = TableIndex::from(&token.name);
-                }
-
-                TokenClass::Op => {
-                    println!("comparing precedence of {:?} and {:?}", prev_op, TableIndex::from(&token.name));
-
-                    match grammar_rules.lookup_precedence(prev_op, &token.name) {
-                        Precedence::Yields => {
-                            println!("Yields... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
-                            self.pda_stack.push(token.clone()); 
-                        }
-
-                        Precedence::Takes => {
-                            println!("Takes... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
-                            self.pda_stack.push(token.clone()); 
-                            if let Some(v) = handle_vec.pop() {
-                                handle_counter = v;
-                            }
                         },
                         
                         Precedence::Equal => {

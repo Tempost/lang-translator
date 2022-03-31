@@ -36,6 +36,19 @@ enum SyntaxClass {
     Fac,
 }
 
+const RESERVED_WORDS: [&str; 10] = [
+    "CONST",
+    "IF",
+    "VAR",
+    "THEN",
+    "PROCEDURE",
+    "WHILE",
+    "CALL",
+    "DO",
+    "ODD",
+    "CLASS",
+];
+
 pub struct Syntax {
     tokens: TokenList,
     pda_stack: Vec<Token>
@@ -51,30 +64,15 @@ struct Quads {
 #[derive(Debug, PartialEq, Eq)]
 pub struct SyntaxError<'a>(&'a str, &'a TokenClass);
 
-impl<'a> Error for SyntaxError<'a> {}
-
 impl<'a> fmt::Display for SyntaxError<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Syntax Error! at token name: {} class: {:?}",
+            "[ Syntax Error ] at token name: {} class: {:?}",
             self.0, self.1
         )
     }
 }
-
-const RESERVED_WORDS: [&str; 10] = [
-    "CONST",
-    "IF",
-    "VAR",
-    "THEN",
-    "PROCEDURE",
-    "WHILE",
-    "CALL",
-    "DO",
-    "ODD",
-    "CLASS",
-];
 
 impl Syntax {
     fn new() -> Self {
@@ -107,15 +105,15 @@ impl Syntax {
         let mut iter = self.tokens.iter();
         let mut prev_op = TableIndex::Nil;
 
-        let empty_token = Token {
-            name: String::from("Empty"),
+        let end_token = Token {
+            name: String::from("Terminator"),
             class: TokenClass::Delimiter 
         };
 
-        let mut handle: Vec<Vec<Token>> = Vec::new();
-        let mut curr_handle: Vec<Token> = Vec::new();
+        let mut handles: Vec<Vec<Token>> = Vec::new();
+        let mut handle: Vec<Token> = Vec::new();
 
-        self.pda_stack.push(empty_token);
+        self.pda_stack.push(end_token);
 
         while let Some(token) = iter.next() {
             match token.class {
@@ -125,17 +123,17 @@ impl Syntax {
                     match grammar_rules.lookup_precedence(prev_op, &token.name) {
                         Precedence::Yields => {
                             println!("Yields... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
-                            self.pda_stack.push(token.clone()); 
+                            self.pda_stack.push(token.clone());
                         }
 
                         Precedence::Takes => {
                             println!("Takes... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
-                            self.pda_stack.push(token.clone()); 
+                            self.pda_stack.push(token.clone());
                         },
                         
                         Precedence::Equal => {
                             println!("Equal... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
-                            self.pda_stack.push(token.clone()); 
+                            self.pda_stack.push(token.clone());
                         }
 
                         Precedence::Nil => return Err(SyntaxError(token.name.as_str(), &token.class)),
@@ -167,11 +165,7 @@ impl Syntax {
                     prev_op = TableIndex::from(&token.name);
                 }
 
-                TokenClass::Identifier => {
-                    self.pda_stack.push(token.clone()); 
-                }
-
-                TokenClass::Literal => {
+                TokenClass::Identifier | TokenClass::Literal => {
                     self.pda_stack.push(token.clone()); 
                 }
 
@@ -181,7 +175,6 @@ impl Syntax {
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod test {

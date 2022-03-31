@@ -1,5 +1,8 @@
+use std::str::FromStr;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+
+use super::syntax::SyntaxError;
 
 pub type RelMatrix = Vec<Vec<Precedence>>;
 

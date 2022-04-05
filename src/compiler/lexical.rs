@@ -23,6 +23,7 @@ pub enum Terminal {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TokenClass {
     Identifier,
+    ReservedWord,
     Literal,
     Delimiter,
     Op,
@@ -38,6 +39,19 @@ pub struct Token {
 pub struct Tokenize {
     pub characters: Peekable<IntoIter<char>>,
 }
+
+const RESERVED_WORDS: [&str; 10] = [
+    "CONST",
+    "IF",
+    "VAR",
+    "THEN",
+    "PROCEDURE",
+    "WHILE",
+    "CALL",
+    "DO",
+    "ODD",
+    "CLASS",
+];
 
 fn debug_print_kek(curr_state: &usize, name: &str, flag: bool) {
     let added: &str = if flag { "ADDED" } else { "" };
@@ -78,8 +92,7 @@ impl Tokenize {
         .ok();
 
         while let Some(token) = peek_self.next() {
-            goto_state =
-                Tokenize::table_lookup(curr_state, usize::from(token.class), "symbol_fsa");
+            goto_state = Tokenize::table_lookup(curr_state, usize::from(token.class), "symbol_fsa");
 
             match goto_state {
                 0 | 1 | 3 | 4 | 6 | 7 | 8 | 10 => debug_print_kek(&curr_state, &token.name, false),
@@ -157,11 +170,11 @@ impl Tokenize {
 impl From<TokenClass> for usize {
     fn from(class: TokenClass) -> usize {
         match class {
-            TokenClass::Identifier => 0,
+            TokenClass::Identifier | TokenClass::ReservedWord => 0,
             TokenClass::Literal => 1,
             TokenClass::Delimiter => 2,
             TokenClass::Op => 3,
-            TokenClass::Unknown => panic!("[ Error ] Cannot index unknown Token Class.")
+            TokenClass::Unknown => panic!("[ Error ] Cannot index unknown Token Class."),
         }
     }
 }
@@ -366,6 +379,10 @@ impl Iterator for Tokenize {
                 // proper error handling
                 _ => panic!("[ ERROR ] Unreachable state, handle me better"),
             }
+        }
+
+        if RESERVED_WORDS.contains(&token.name.as_str()) {
+            token.class = TokenClass::ReservedWord; 
         }
 
         // Send out token wrapped in option. Will return None to detonte end of Iter

@@ -36,19 +36,6 @@ enum SyntaxClass {
     Fac,
 }
 
-const RESERVED_WORDS: [&str; 10] = [
-    "CONST",
-    "IF",
-    "VAR",
-    "THEN",
-    "PROCEDURE",
-    "WHILE",
-    "CALL",
-    "DO",
-    "ODD",
-    "CLASS",
-];
-
 pub struct Syntax {
     tokens: TokenList,
     pda_stack: Vec<Token>
@@ -117,31 +104,8 @@ impl Syntax {
 
         while let Some(token) = iter.next() {
             match token.class {
-                TokenClass::Identifier if RESERVED_WORDS.contains(&token.name.as_str()) => {
-                    println!("comparing precedence of {:?} and {:?}", prev_op, TableIndex::from(&token.name));
 
-                    match grammar_rules.lookup_precedence(prev_op, &token.name) {
-                        Precedence::Yields => {
-                            println!("Yields... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
-                            self.pda_stack.push(token.clone());
-                        }
-
-                        Precedence::Takes => {
-                            println!("Takes... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
-                            self.pda_stack.push(token.clone());
-                        },
-                        
-                        Precedence::Equal => {
-                            println!("Equal... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
-                            self.pda_stack.push(token.clone());
-                        }
-
-                        Precedence::Nil => return Err(SyntaxError(token.name.as_str(), &token.class)),
-                    }
-                    prev_op = TableIndex::from(&token.name);
-                }
-
-                TokenClass::Delimiter | TokenClass::Op => {
+                TokenClass::Delimiter | TokenClass::Op | TokenClass::ReservedWord => {
                     println!("comparing precedence of {:?} and {:?}", prev_op, TableIndex::from(&token.name));
 
                     match grammar_rules.lookup_precedence(prev_op, &token.name) {

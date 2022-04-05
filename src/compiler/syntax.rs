@@ -38,8 +38,9 @@ enum SyntaxClass {
 
 pub struct Syntax {
     tokens: TokenList,
-    pda_stack: Vec<Token>
+    token_stack: Vec<Token>
 }
+
 
 struct Quads {
     op: String,
@@ -65,16 +66,16 @@ impl Syntax {
     fn new() -> Self {
         Syntax { 
             tokens: Vec::new(),
-            pda_stack: Vec::new()
+            token_stack: Vec::new()
         }
     }
 
-    pub fn pda_stack_from_file(&mut self, file: &str) {
+    pub fn stack_from_file(&mut self, file: &str) {
         // Parse name -- TokenClass into token struct, push into TokenList
         unimplemented!();
     }
 
-    pub fn pda_stack_from_memory(&mut self, file: &str) {
+    pub fn stack_from_memory(&mut self, file: &str) {
         let mut lex = Tokenize::create_scanner(file).unwrap();
         while let Some(token) = lex.next() {
             self.tokens.push(token);
@@ -97,31 +98,32 @@ impl Syntax {
             class: TokenClass::Delimiter 
         };
 
-        let mut handles: Vec<Vec<Token>> = Vec::new();
-        let mut handle: Vec<Token> = Vec::new();
-
-        self.pda_stack.push(end_token);
+        self.token_stack.push(end_token);
 
         while let Some(token) = iter.next() {
             match token.class {
-
                 TokenClass::Delimiter | TokenClass::Op | TokenClass::ReservedWord => {
                     println!("comparing precedence of {:?} and {:?}", prev_op, TableIndex::from(&token.name));
 
                     match grammar_rules.lookup_precedence(prev_op, &token.name) {
                         Precedence::Yields => {
+                            // Push into stack
                             println!("Yields... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
-                            self.pda_stack.push(token.clone()); 
+                            self.token_stack.push(token.clone()); 
                         }
 
                         Precedence::Takes => {
+                            // Pop up to last yields and reduce/generate quads
+                            // Create function that will loop through and pop until a yields was
+                            // hit. Return all items popped as a new vec
                             println!("Takes... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
-                            self.pda_stack.push(token.clone()); 
+                            self.token_stack.push(token.clone()); 
                         },
                         
                         Precedence::Equal => {
+                            // Just push into stack
                             println!("Equal... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
-                            self.pda_stack.push(token.clone()); 
+                            self.token_stack.push(token.clone()); 
                         }
 
                         Precedence::Nil => return Err(SyntaxError(token.name.as_str(), &token.class)),
@@ -130,7 +132,7 @@ impl Syntax {
                 }
 
                 TokenClass::Identifier | TokenClass::Literal => {
-                    self.pda_stack.push(token.clone()); 
+                    self.token_stack.push(token.clone()); 
                 }
 
                 TokenClass::Unknown => return Err(SyntaxError(token.name.as_str(), &token.class))
@@ -147,7 +149,7 @@ mod test {
     #[test]
     fn in_memory_tokens_work() {
         let mut syn = Syntax::new();
-        syn.pda_stack_from_memory("program.java");
+        syn.stack_from_memory("program.java");
 
         let name = syn.tokens.first();
         assert_eq!(name.unwrap().name, String::from("CLASS"));
@@ -160,7 +162,7 @@ mod test {
     #[ignore]
     fn from_file_tokens_work() {
         let mut syn = Syntax::new();
-        syn.pda_stack_from_file("symbols");
+        syn.stack_from_file("symbols");
 
         let name = syn.tokens.first();
         assert_eq!(name.unwrap().name, String::from("CLASS"));
@@ -169,7 +171,7 @@ mod test {
     #[test]
     fn syntax_works() {
         let mut syn = Syntax::new();
-        syn.pda_stack_from_memory("program.java");
+        syn.stack_from_memory("program.java");
 
         let good = syn.complete_analysis();
         match good {

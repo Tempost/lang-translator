@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::fmt;
 
 // Take tokens from lex portion of the code
@@ -6,7 +5,6 @@ use crate::compiler::lexical::{Token, TokenClass, Tokenize};
 use crate::compiler::precedence::{Precedence, TableIndex, GrammarTable };
 
 type TokenList = Vec<Token>;
-type TokenListRef<'a> = Vec<&'a Token>;
 
 type Result<'a, T> = std::result::Result<T, SyntaxError<'a>>;
 
@@ -37,16 +35,9 @@ enum SyntaxClass {
 }
 
 pub struct Syntax {
-    tokens: TokenList,
-    token_stack: Vec<Token>
-}
-
-
-struct Quads {
-    op: String,
-    var_one: String,
-    var_two: String,
-    var_three: String,
+    token_input: TokenList,
+    token_stack: TokenList,
+    yields_loc: Vec<usize>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -65,20 +56,16 @@ impl<'a> fmt::Display for SyntaxError<'a> {
 impl Syntax {
     fn new() -> Self {
         Syntax { 
-            tokens: Vec::new(),
-            token_stack: Vec::new()
+            token_input: Vec::new(),
+            token_stack: Vec::new(),
+            yields_loc: Vec::new()
         }
-    }
-
-    pub fn stack_from_file(&mut self, file: &str) {
-        // Parse name -- TokenClass into token struct, push into TokenList
-        unimplemented!();
     }
 
     pub fn stack_from_memory(&mut self, file: &str) {
         let mut lex = Tokenize::create_scanner(file).unwrap();
         while let Some(token) = lex.next() {
-            self.tokens.push(token);
+            self.token_input.push(token);
         }
     }
 
@@ -90,7 +77,8 @@ impl Syntax {
         // Determine what to do based on output of the compare, IE contuine pushing to the PDA
         // stack, or reduce to a new handle(syntax class). Contuine until no more tokens
 
-        let mut iter = self.tokens.iter();
+        let mut iter = self.token_input.iter();
+        let mut yield_counter: usize = 0;
         let mut prev_op = TableIndex::Nil;
 
         let end_token = Token {
@@ -101,6 +89,8 @@ impl Syntax {
         self.token_stack.push(end_token);
 
         while let Some(token) = iter.next() {
+            yield_counter += 1;
+
             match token.class {
                 TokenClass::Delimiter | TokenClass::Op | TokenClass::ReservedWord => {
                     println!("comparing precedence of {:?} and {:?}", prev_op, TableIndex::from(&token.name));
@@ -110,14 +100,24 @@ impl Syntax {
                             // Push into stack
                             println!("Yields... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
                             self.token_stack.push(token.clone()); 
+                            self.yields_loc.push(yield_counter);
                         }
 
                         Precedence::Takes => {
-                            // Pop up to last yields and reduce/generate quads
-                            // Create function that will loop through and pop until a yields was
-                            // hit. Return all items popped as a new vec
-                            println!("Takes... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
-                            self.token_stack.push(token.clone()); 
+                            // TODO: Not popping properly? First reduction pops nothing from the
+                            // stack for some reason
+                            println!("Takes... Reducing handle.");
+
+                            let mut handle: Vec<Token> = Vec::new();
+
+                            let loc = self.yields_loc.pop().unwrap() - 1;
+                            println!("loc: {}, len: {}", &loc, self.token_stack.len());
+
+                            handle = self.token_stack.drain(loc..).collect();
+                            
+                            print!("Handle:");
+                            handle.iter().for_each(|x| print!("{:>5}", x.name));
+                            println!("\n");
                         },
                         
                         Precedence::Equal => {
@@ -151,21 +151,11 @@ mod test {
         let mut syn = Syntax::new();
         syn.stack_from_memory("program.java");
 
-        let name = syn.tokens.first();
+        let name = syn.token_input.first();
         assert_eq!(name.unwrap().name, String::from("CLASS"));
 
-        let name = syn.tokens.last();
+        let name = syn.token_input.last();
         assert_eq!(name.unwrap().name, String::from("}"));
-    }
-
-    #[test]
-    #[ignore]
-    fn from_file_tokens_work() {
-        let mut syn = Syntax::new();
-        syn.stack_from_file("symbols");
-
-        let name = syn.tokens.first();
-        assert_eq!(name.unwrap().name, String::from("CLASS"));
     }
 
     #[test]

@@ -87,9 +87,9 @@ impl Syntax {
         };
 
         self.token_stack.push(end_token);
+        let mut reduction_flag = false;
 
         while let Some(token) = iter.next() {
-            yield_counter += 1;
 
             match token.class {
                 TokenClass::Delimiter | TokenClass::Op | TokenClass::ReservedWord => {
@@ -98,8 +98,10 @@ impl Syntax {
                     match grammar_rules.lookup_precedence(prev_op, &token.name) {
                         Precedence::Yields => {
                             // Push into stack
-                            println!("Yields... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
+                            println!("Yields... Pushing {:?} to the stack.", TableIndex::from(&token.name));
                             self.token_stack.push(token.clone()); 
+
+                            println!("New Yields, pushing loc '{}' to the stack.\n", &yield_counter);
                             self.yields_loc.push(yield_counter);
                         }
 
@@ -110,14 +112,21 @@ impl Syntax {
 
                             let mut handle: Vec<Token> = Vec::new();
 
-                            let loc = self.yields_loc.pop().unwrap() - 1;
-                            println!("loc: {}, len: {}", &loc, self.token_stack.len());
+                            let loc = self.yields_loc.pop().unwrap();
+                            println!("loc: {}, len: {}", &loc, &self.token_stack.len());
 
                             handle = self.token_stack.drain(loc..).collect();
-                            
-                            print!("Handle:");
-                            handle.iter().for_each(|x| print!("{:>5}", x.name));
+                            // NOTE: No need to enumerate into quads, just do code gen
+                            handle.iter().for_each(|x| print!("{:<5}", x.name));
                             println!("\n");
+
+                            // TODO: Set last item in loction stack to current loc + count of remaining items
+                            // after current loc
+                            
+                            let new_loc = self.yields_loc.pop().unwrap() + 1;
+                            self.yields_loc.push(new_loc);
+                            yield_counter = new_loc;
+
                         },
                         
                         Precedence::Equal => {
@@ -137,6 +146,7 @@ impl Syntax {
 
                 TokenClass::Unknown => return Err(SyntaxError(token.name.as_str(), &token.class))
             }
+            yield_counter += 1;
         }
         Ok(())
     }

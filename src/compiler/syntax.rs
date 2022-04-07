@@ -90,6 +90,7 @@ impl Syntax {
         let mut reduction_flag = false;
 
         while let Some(token) = iter.next() {
+            yield_counter += 1;
 
             match token.class {
                 TokenClass::Delimiter | TokenClass::Op | TokenClass::ReservedWord => {
@@ -108,25 +109,26 @@ impl Syntax {
                         Precedence::Takes => {
                             // TODO: Not popping properly? First reduction pops nothing from the
                             // stack for some reason
+                            // NOTE: Check out polish notation, might help quite a bit for the
+                            // return value of this function
                             println!("Takes... Reducing handle.");
 
                             let mut handle: Vec<Token> = Vec::new();
 
                             let loc = self.yields_loc.pop().unwrap();
-                            println!("loc: {}, len: {}", &loc, &self.token_stack.len());
+                            println!("loc: {}, len: {}", &loc - 1, &self.token_stack.len());
 
-                            handle = self.token_stack.drain(loc..).collect();
-                            // NOTE: No need to enumerate into quads, just do code gen
+                            handle = self.token_stack.drain(loc - 1..).collect();
+                            
+                            // TODO: Convert handle into polish notation here
+                            // handle = convert_to_polish(handle);
+
                             handle.iter().for_each(|x| print!("{:<5}", x.name));
                             println!("\n");
 
-                            // TODO: Set last item in loction stack to current loc + count of remaining items
-                            // after current loc
-                            
-                            let new_loc = self.yields_loc.pop().unwrap() + 1;
-                            self.yields_loc.push(new_loc);
-                            yield_counter = new_loc;
-
+                            yield_counter = self.yields_loc.pop().unwrap();
+                            // let new_loc = self.yields_loc.pop().unwrap() + 2;
+                            // self.yields_loc.push(new_loc);
                         },
                         
                         Precedence::Equal => {
@@ -146,7 +148,6 @@ impl Syntax {
 
                 TokenClass::Unknown => return Err(SyntaxError(token.name.as_str(), &token.class))
             }
-            yield_counter += 1;
         }
         Ok(())
     }

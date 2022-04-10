@@ -62,11 +62,20 @@ impl Syntax {
         }
     }
 
-    pub fn stack_from_memory(&mut self, file: &str) {
+    pub fn tokens_from_memory(&mut self, file: &str) {
         let mut lex = Tokenize::create_scanner(file).unwrap();
+        let terminator = Token {
+            name: String::from("Terminator"),
+            class: TokenClass::Delimiter
+        };
+        
+        // Analysis needs a "terminator" token on both the start and end of the stack
+        self.token_input.push(terminator.clone());
         while let Some(token) = lex.next() {
             self.token_input.push(token);
         }
+
+        self.token_input.push(terminator);
     }
 
     pub fn complete_analysis(&mut self) -> Result<()> {
@@ -78,72 +87,61 @@ impl Syntax {
         // stack, or reduce to a new handle(syntax class). Contuine until no more tokens
 
         let mut iter = self.token_input.iter();
-        let mut yield_counter: usize = 0;
         let mut prev_op = TableIndex::Nil;
 
-        let end_token = Token {
-            name: String::from("Terminator"),
-            class: TokenClass::Delimiter 
-        };
+        let mut curr_loc: usize = 0;
+        let mut op_loc: Vec<usize> = Vec::new();
 
-        self.token_stack.push(end_token);
-        let mut reduction_flag = false;
 
+        let mut reduction = false;
         while let Some(token) = iter.next() {
-            yield_counter += 1;
-
+            curr_loc += 1;
+            // pushing current token into a handle stack
             match token.class {
                 TokenClass::Delimiter | TokenClass::Op | TokenClass::ReservedWord => {
+
+                    if token.name == "Terminator" {
+                        continue
+                    }
+
                     println!("comparing precedence of {:?} and {:?}", prev_op, TableIndex::from(&token.name));
 
                     match grammar_rules.lookup_precedence(prev_op, &token.name) {
                         Precedence::Yields => {
                             // Push into stack
                             println!("Yields... Pushing {:?} to the stack.", TableIndex::from(&token.name));
-                            self.token_stack.push(token.clone()); 
-
-                            println!("New Yields, pushing loc '{}' to the stack.\n", &yield_counter);
-                            self.yields_loc.push(yield_counter);
+                            self.token_stack.push(token.clone());
+                            op_loc.push(curr_loc);
                         }
 
                         Precedence::Takes => {
-                            // TODO: Not popping properly? First reduction pops nothing from the
-                            // stack for some reason
                             // NOTE: Check out polish notation, might help quite a bit for the
                             // return value of this function
+                            // if pop values contain an operator, output quads
+                            // https://newbedev.com/equation-expression-parser-with-precedence
+                            // Check reference folder, plenty of information to solve this problem
+                            // ezmode
                             println!("Takes... Reducing handle.");
-
-                            let mut handle: Vec<Token> = Vec::new();
-
-                            let loc = self.yields_loc.pop().unwrap();
-                            println!("loc: {}, len: {}", &loc - 1, &self.token_stack.len());
-
-                            handle = self.token_stack.drain(loc - 1..).collect();
-                            
-                            // TODO: Convert handle into polish notation here
-                            // handle = convert_to_polish(handle);
-
-                            handle.iter().for_each(|x| print!("{:<5}", x.name));
-                            println!("\n");
-
-                            yield_counter = self.yields_loc.pop().unwrap();
-                            // let new_loc = self.yields_loc.pop().unwrap() + 2;
-                            // self.yields_loc.push(new_loc);
+                            reduction = true;
                         },
                         
                         Precedence::Equal => {
                             // Just push into stack
                             println!("Equal... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
-                            self.token_stack.push(token.clone()); 
+                            self.token_stack.push(token.clone());
                         }
 
                         Precedence::Nil => return Err(SyntaxError(token.name.as_str(), &token.class)),
                     }
-                    prev_op = TableIndex::from(&token.name);
+                    if !reduction {
+                        prev_op = TableIndex::from(&token.name);
+                    } else {
+                        reduction = false;
+                    }
                 }
 
                 TokenClass::Identifier | TokenClass::Literal => {
-                    self.token_stack.push(token.clone()); 
+                    self.token_stack.push(token.clone());
                 }
 
                 TokenClass::Unknown => return Err(SyntaxError(token.name.as_str(), &token.class))
@@ -160,7 +158,7 @@ mod test {
     #[test]
     fn in_memory_tokens_work() {
         let mut syn = Syntax::new();
-        syn.stack_from_memory("program.java");
+        syn.tokens_from_memory("program.java");
 
         let name = syn.token_input.first();
         assert_eq!(name.unwrap().name, String::from("CLASS"));
@@ -172,7 +170,7 @@ mod test {
     #[test]
     fn syntax_works() {
         let mut syn = Syntax::new();
-        syn.stack_from_memory("program.java");
+        syn.tokens_from_memory("program.java");
 
         let good = syn.complete_analysis();
         match good {

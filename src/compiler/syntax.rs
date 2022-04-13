@@ -1,8 +1,10 @@
 use std::fmt;
+use std::vec::IntoIter;
 
 // Take tokens from lex portion of the code
 use crate::compiler::lexical::{Token, TokenClass, Tokenize};
-use crate::compiler::precedence::{Precedence, TableIndex, GrammarTable };
+use crate::compiler::precedence::{PrecedenceGrammar, OPG};
+use crate::compiler::tableindex::TableIndex;
 
 type TokenList = Vec<Token>;
 
@@ -35,13 +37,20 @@ enum SyntaxClass {
 }
 
 pub struct Syntax {
-    token_input: TokenList,
+    token_iter: IntoIter<Token>,
     token_stack: TokenList,
-    yields_loc: Vec<usize>,
+    p_func: Vec<Vec<i32>>
+}
+
+pub struct Quads {
+    op: SyntaxClass,
+    ident1: SyntaxClass,
+    ident2: SyntaxClass,
+    indet3: SyntaxClass,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct SyntaxError<'a>(&'a str, &'a TokenClass);
+pub struct SyntaxError<'a>(&'a str, TokenClass);
 
 impl<'a> fmt::Display for SyntaxError<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -54,134 +63,88 @@ impl<'a> fmt::Display for SyntaxError<'a> {
 }
 
 impl Syntax {
-    fn new() -> Self {
+    fn new(file: &str) -> Self {
         Syntax { 
-            token_input: Vec::new(),
+            token_iter: Syntax::tokens_from_memory(file),
             token_stack: Vec::new(),
-            yields_loc: Vec::new()
+            p_func: Syntax::get_precedence_func(),
         }
     }
 
-    pub fn tokens_from_memory(&mut self, file: &str) {
+    // Using the handles generated in a previous step, construct the precedence function
+    // using the method discussed in class to also decrease the memeory size
+    fn get_precedence_func() -> Vec<Vec<i32>> {
+        let mut grammar: OPG = OPG::new();
+        grammar.parse_input(false);
+        grammar.shrink_precedence();
+
+        let mut matrix: Vec<Vec<i32>> = Vec::new();
+
+        matrix.push(grammar.f);
+        matrix.push(grammar.g);
+         
+        matrix
+    }
+
+    // Return a stack of iterable tokens
+    fn tokens_from_memory(file: &str) -> IntoIter<Token> {
         let mut lex = Tokenize::create_scanner(file).unwrap();
+        let mut stack: TokenList = Vec::new();
+
+        // Stack requires to be wrapped in a starting/end dummy token
         let terminator = Token {
             name: String::from("Terminator"),
             class: TokenClass::Delimiter
         };
         
         // Analysis needs a "terminator" token on both the start and end of the stack
-        self.token_input.push(terminator.clone());
+        stack.push(terminator.clone());
         while let Some(token) = lex.next() {
-            self.token_input.push(token);
+            stack.push(token);
         }
 
-        self.token_input.push(terminator);
+        stack.push(terminator);
+
+        stack.into_iter()
     }
 
     pub fn complete_analysis(&mut self) -> Result<()> {
-        let grammar_rules = GrammarTable::new("table");
+        // Consume first token, pushing it to the stack
+        self.token_stack.push(self.token_iter.next().unwrap().to_owned());
 
-        // push token into PDA stack until a operator or reserved word is hit
-        // Compare last operator/RW with next from the token stack to determine precendece
-        // Determine what to do based on output of the compare, IE contuine pushing to the PDA
-        // stack, or reduce to a new handle(syntax class). Contuine until no more tokens
-
-        let mut iter = self.token_input.iter();
-        let mut prev_op = TableIndex::Nil;
-
-        let mut curr_loc: usize = 0;
-        let mut op_loc: Vec<usize> = Vec::new();
-
-
-        let mut reduction = false;
-        while let Some(token) = iter.next() {
-            curr_loc += 1;
-            // pushing current token into a handle stack
+        while let Some(token) = self.token_iter.next() {
             match token.class {
-                TokenClass::Delimiter | TokenClass::Op | TokenClass::ReservedWord => {
-
-                    if token.name == "Terminator" {
-                        continue
-                    }
-
-                    println!("comparing precedence of {:?} and {:?}", prev_op, TableIndex::from(&token.name));
-
-                    match grammar_rules.lookup_precedence(prev_op, &token.name) {
-                        Precedence::Yields => {
-                            // Push into stack
-                            println!("Yields... Pushing {:?} to the stack.", TableIndex::from(&token.name));
-                            self.token_stack.push(token.clone());
-                            op_loc.push(curr_loc);
-                        }
-
-                        Precedence::Takes => {
-                            // NOTE: Check out polish notation, might help quite a bit for the
-                            // return value of this function
-                            // if pop values contain an operator, output quads
-                            // https://newbedev.com/equation-expression-parser-with-precedence
-                            // Check reference folder, plenty of information to solve this problem
-                            // ezmode
-                            println!("Takes... Reducing handle.");
-                            reduction = true;
-                        },
-                        
-                        Precedence::Equal => {
-                            // Just push into stack
-                            println!("Equal... Pushing {:?} to the stack.\n", TableIndex::from(&token.name));
-                            self.token_stack.push(token.clone());
-                        }
-
-                        Precedence::Nil => return Err(SyntaxError(token.name.as_str(), &token.class)),
-                    }
-                    if !reduction {
-                        prev_op = TableIndex::from(&token.name);
-                    } else {
-                        reduction = false;
-                    }
-                }
-
                 TokenClass::Identifier | TokenClass::Literal => {
-                    self.token_stack.push(token.clone());
                 }
 
-                TokenClass::Unknown => return Err(SyntaxError(token.name.as_str(), &token.class))
+                TokenClass::ReservedWord | TokenClass::Op | TokenClass::Delimiter => {
+                }
+
+                TokenClass::Unknown => return Err(SyntaxError("Something went wrong parsing at: ", token.class)),
             }
         }
         Ok(())
     }
 }
 
+
+
 #[cfg(test)]
 mod test {
+
     use super::*;
 
     #[test]
-    fn in_memory_tokens_work() {
-        let mut syn = Syntax::new();
-        syn.tokens_from_memory("program.java");
+    #[should_panic]
+    fn syntax_error() {
+        let mut syn = Syntax::new("program.java");
 
-        let name = syn.token_input.first();
-        assert_eq!(name.unwrap().name, String::from("CLASS"));
-
-        let name = syn.token_input.last();
-        assert_eq!(name.unwrap().name, String::from("}"));
+        assert!(syn.complete_analysis().is_err());
     }
-
+    
     #[test]
-    fn syntax_works() {
-        let mut syn = Syntax::new();
-        syn.tokens_from_memory("program.java");
-
-        let good = syn.complete_analysis();
-        match good {
-            Ok(_) => println!("Finished"),
-            Err(e) => println!("{}", e),
-        }
-    }
-
-    #[test]
-    fn parse_works() {
-        let grammar = GrammarTable::new("table");
-        grammar.print_table();
+    fn syntax_ok() {
+        let mut syn = Syntax::new("program.java");
+        assert!(syn.complete_analysis().is_ok());
     }
 }

@@ -1,139 +1,262 @@
-use std::str::FromStr;
+use std::io::{self, BufRead};
+use std::path::Path;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
 
-use super::syntax::SyntaxError;
+use crate::boolean::matrix::{self, Matrix};
 
-pub type RelMatrix = Vec<Vec<Precedence>>;
-
-#[derive(Debug, Clone, Copy)]
-pub enum Precedence {
-    Yields,
-    Takes,
-    Equal,
-    Nil,
+pub trait PrecedenceGrammar {
+    fn new() -> Self;
+    fn parse_input(&mut self, compute_handles: bool);
+    fn shrink_precedence(&mut self);
+    fn compute_handles(&mut self);
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum TableIndex {
-    Nil,
-    Assignment,
-    Plus,
-    Minus,
-    LParen,
-    RParen,
-    Mop,
-    Div,
-    IF,
-    Then,
-    Odd,
-    Equal,
-    NEqual,
-    GreaterThan,
-    LessThan,
-    GEqual,
-    LEqual,
-    LBracket,
-    RBracket,
-    Class,
-    Var,
-    Const,
-    Semi,
-    Comma,
+pub struct OPG {
+    first: Matrix,
+    first_term: Matrix,
+    last: Matrix,
+    last_term: Matrix,
+    takes: Matrix,
+    yields: Matrix,
+    equal: Matrix,
+    rtc: Matrix,
+    pub f: Vec<i32>,
+    pub g: Vec<i32>,
+    m_dimension: usize,
 }
 
-impl From<Precedence> for String {
-    fn from(p: Precedence) -> String {
-        match p {
-            Precedence::Yields => "<".to_string(),
-            Precedence::Takes => ">".to_string(),
-            Precedence::Equal => "=".to_string(),
-            Precedence::Nil => "0".to_string(),
+pub struct SPG {
+    first: Matrix,
+    last: Matrix,
+    takes: Matrix,
+    yields: Matrix,
+    equal: Matrix,
+    rtc: Matrix,
+    pub f: Vec<i32>,
+    pub g: Vec<i32>,
+    m_dimension: usize,
+}
+
+impl OPG {
+    fn create_b_matrix(&mut self) {
+        let b_matrix_len = self.m_dimension * 2;
+        let mut b_matrix: Matrix = vec![vec![false; b_matrix_len]; b_matrix_len]; 
+
+        let takes_equal = matrix::combine_matrix(&self.takes, &self.equal);
+        let yields_equal = matrix::combine_matrix(&self.yields, &self.equal);
+
+        let yields_equal = matrix::transpose(&yields_equal);
+
+        for row in 0..b_matrix_len {
+            for col in 0..b_matrix_len {
+                if row < (self.m_dimension) && col >= (self.m_dimension) {
+                    b_matrix[row][col] = takes_equal[row][col % (self.m_dimension)];
+                }
+
+                if row >= (self.m_dimension) && col < (self.m_dimension){
+                    b_matrix[row][col] = yields_equal[row % (self.m_dimension)][col % (self.m_dimension)];
+                }
+            }
         }
+
+        let identity = matrix::create_identity(b_matrix_len); 
+        b_matrix = matrix::transitive_closure(&b_matrix);
+        b_matrix = matrix::sum(&b_matrix, &identity); 
+        self.rtc = b_matrix;
     }
 }
 
-impl From<TableIndex> for usize {
-    fn from(t: TableIndex) -> usize {
-        match t {
-            TableIndex::Nil => 0,
-            TableIndex::Assignment => 1,
-            TableIndex::Plus => 2,
-            TableIndex::Minus => 3,
-            TableIndex::LParen => 4,
-            TableIndex::RParen => 5,
-            TableIndex::Mop => 6,
-            TableIndex::Div => 7,
-            TableIndex::IF => 8,
-            TableIndex::Then => 9,
-            TableIndex::Odd => 10,
-            TableIndex::Equal => 11,
-            TableIndex::NEqual => 12,
-            TableIndex::GreaterThan => 13,
-            TableIndex::LessThan => 14,
-            TableIndex::GEqual => 15,
-            TableIndex::LEqual => 16,
-            TableIndex::LBracket => 17,
-            TableIndex::RBracket => 18,
-            TableIndex::Class => 19,
-            TableIndex::Var => 20,
-            TableIndex::Const => 21,
-            TableIndex::Semi => 22,
-            TableIndex::Comma => 23,
+impl PrecedenceGrammar for OPG {
+    fn new() -> OPG {
+        OPG {
+            first: Vec::new(),
+            first_term: Vec::new(),
+            last: Vec::new(),
+            last_term: Vec::new(),
+            takes: Vec::new(),
+            yields: Vec::new(),
+            equal: Vec::new(),
+            rtc: Vec::new(),
+            f: Vec::new(),
+            g: Vec::new(),
+            m_dimension: 0,
         }
     }
-}
 
-impl From<&String> for TableIndex {
-    fn from(s: &String) -> TableIndex {
-        match s.as_str() {
-            "=" => TableIndex::Assignment,
-            "+" => TableIndex::Plus,
-            "-" => TableIndex::Minus,
-            "(" => TableIndex::LParen,
-            ")" => TableIndex::RParen,
-            "*" => TableIndex::Mop,
-            "/" => TableIndex::Div,
-            "IF" => TableIndex::IF,
-            "THEN" => TableIndex::Then,
-            "ODD" => TableIndex::Odd,
-            "==" => TableIndex::Equal,
-            "!=" => TableIndex::NEqual,
-            ">" => TableIndex::GreaterThan,
-            "<" => TableIndex::LessThan,
-            ">=" => TableIndex::GEqual,
-            "<=" => TableIndex::LEqual,
-            "{" => TableIndex::LBracket,
-            "}" => TableIndex::RBracket,
-            "CLASS" => TableIndex::Class,
-            "VAR" => TableIndex::Var,
-            "CONST" => TableIndex::Const,
-            ";" => TableIndex::Semi,
-            "," => TableIndex::Comma,
-            _ => TableIndex::Nil,
-        }
-    }
-}
+    fn parse_input(&mut self, compute_handles: bool) {
+        let path = Path::new("src/compiler/fsa_tables/handles.txt");
+        let path_string = path.display();
 
-pub struct GrammarTable {
-    pub table: RelMatrix,
-    pub dimension: usize,
-}
-
-impl GrammarTable {
-    pub fn new(filename: &str) -> Self {
-        let file = File::open(filename).expect("No such file.");
-        let file = BufReader::new(file);
-
-        let mut lines = file.lines();
-
-        let mut matrix: RelMatrix = Vec::new();
-
-        let mut grammar_table = GrammarTable {
-            table: Vec::new(),
-            dimension: 0,
+        let in_file = match File::open(&path) {
+            Err(e) => panic!("[ Error ] Trouble locating {}, {}", path_string, e),
+            Ok(file) => io::BufReader::new(file),
         };
 
+        let mut lines = in_file.lines();
+
+        let mut matrix: Matrix = Vec::new();
+        while let Some(line) = lines.next() {
+            let matrix_dim = line.unwrap();
+
+            // Skip any blank lines in between the matrices
+            if matrix_dim.is_empty() {
+                continue
+            }
+
+            let mut m_size = matrix_dim.split(' ');
+
+            // Prase the dimensions of the matricies
+            let (x, y) = (
+                m_size.next().unwrap().parse::<i32>().ok().unwrap(),
+                m_size.next().unwrap().parse::<i32>().ok().unwrap(),
+            );
+
+            if x != y {
+                panic!("[ Error ] Please supply a valid square matrix.");
+            }
+
+            self.m_dimension = x as usize;
+
+            let matrix_name: &str = &lines.next().unwrap().ok().unwrap().to_lowercase();
+
+            for _ in 0..x {
+                matrix.push(
+                    lines
+                        .next()
+                        .unwrap()
+                        .unwrap()
+                        .trim()
+                        .split_whitespace()
+                        .map(|x| -> bool {
+                            match x.parse::<u32>().ok().unwrap() {
+                                0 => false,
+                                1 => true,
+                                _ => panic!("[ Error ] Ouch found something not allowed."),
+                            }
+                        })
+                        .collect::<Vec<bool>>(),
+                );
+            }
+           
+            if compute_handles {
+                match matrix_name {
+                    "First" => self.first = matrix.clone(),
+                    "First Term" => self.first_term = matrix.clone(),
+                    "Last" => self.last = matrix.clone(),
+                    "Last Term" => self.last_term = matrix.clone(),
+                    "Equal" => self.equal = matrix.clone(),
+                    _ => panic!("[ Error ] Included too many matrices in input."),
+                }
+            } else {
+                match matrix_name {
+                    "yields" => self.yields = matrix.clone(),
+                    "takes" => self.takes = matrix.clone(),
+                    "equals" => self.equal = matrix.clone(),
+                    v => panic!("[ Error ] Included too many matrices in input. {}", v),
+                }
+            }
+
+            matrix.clear();
+        }
+    }
+
+    fn shrink_precedence(&mut self) {
+        self.create_b_matrix();
+        let length = self.rtc.len();
+
+        let mut count = 0;
+        for row in 0..length {
+            if row < (length / 2) {
+                for col in 0..length {
+                    if self.rtc[row][col] {
+                        count += 1;
+                    }
+                }
+                self.f.push(count);
+            }
+
+            if row >= (length / 2) {
+                for col in 0..length {
+                    if self.rtc[row][col] {
+                        count += 1;
+                    }
+                }
+                self.g.push(count);
+            }
+            count = 0;
+        }
+    }
+
+    fn compute_handles(&mut self) {
+        let mut final_handle: Matrix;
+
+        let first_p = matrix::transitive_closure(&self.first);
+        let identity = matrix::create_identity(10); 
+        let first_s = matrix::sum(&identity, &first_p);
+        
+        final_handle = matrix::product(&self.equal, &first_s);
+        final_handle = matrix::product(&final_handle, &self.first_term);
+        self.yields = final_handle.clone();
+        final_handle.clear();
+
+        let last_p = matrix::transitive_closure(&self.last);
+        let last_s = matrix::sum(&identity, &last_p);
+        final_handle = matrix::product(&last_s, &self.last_term);
+        final_handle = matrix::transpose(&final_handle);
+        final_handle = matrix::product(&final_handle, &self.equal);
+        self.takes = final_handle.clone();
+    }
+}
+
+impl SPG {
+    fn create_b_matrix(&mut self) {
+        let b_matrix_len = self.m_dimension * 2;
+        let mut b_matrix: Matrix = vec![vec![false; b_matrix_len]; b_matrix_len]; 
+
+        let takes_equal = matrix::combine_matrix(&self.takes, &self.equal);
+        let yields_equal = matrix::combine_matrix(&self.yields, &self.equal);
+
+        let yields_equal = matrix::transpose(&yields_equal);
+
+        for row in 0..b_matrix_len {
+            for col in 0..b_matrix_len {
+                if row < (b_matrix_len / 2) && col >= (b_matrix_len / 2) {
+                    b_matrix[row][col] = takes_equal[row][col % (self.m_dimension)];
+                }
+
+                if row >= (b_matrix_len / 2) && col < (b_matrix_len / 2){
+                    b_matrix[row][col] = yields_equal[row % (self.m_dimension)][col % (self.m_dimension)];
+                }
+            }
+        }
+
+        let identity = matrix::create_identity(b_matrix_len); 
+        b_matrix = matrix::transitive_closure(&b_matrix);
+        b_matrix = matrix::sum(&b_matrix, &identity); 
+        self.rtc = b_matrix;
+    }
+}
+
+impl PrecedenceGrammar for SPG {
+    fn new() -> SPG {
+        SPG {
+            first: Vec::new(),
+            last: Vec::new(),
+            takes: Vec::new(),
+            yields: Vec::new(),
+            equal: Vec::new(),
+            rtc: Vec::new(),
+            f: Vec::new(),
+            g: Vec::new(),
+            m_dimension: 0
+        }
+    }
+
+    fn parse_input(&mut self, compute_handles: bool) {
+        let in_handle = io::stdin();
+        let mut lines = in_handle.lock().lines();
+
+        let mut matrix: Matrix = Vec::new();
         while let Some(line) = lines.next() {
             let matrix_dim = line.unwrap();
 
@@ -149,10 +272,12 @@ impl GrammarTable {
             );
 
             if x != y {
-                panic!("Please supply a valid square matrix.");
+                panic!("[ Error ] Please supply a valid square matrix.");
             }
 
-            grammar_table.dimension = x as usize;
+            self.m_dimension = x as usize;
+
+            let matrix_name: &str = &lines.next().unwrap().ok().unwrap().to_lowercase();
 
             for _ in 0..x {
                 matrix.push(
@@ -162,42 +287,86 @@ impl GrammarTable {
                         .unwrap()
                         .trim()
                         .split_whitespace()
-                        .map(|x| -> Precedence {
-                            match x.to_string().as_str() {
-                                "0" => Precedence::Nil,
-                                "<" => Precedence::Yields,
-                                ">" => Precedence::Takes,
-                                "=" => Precedence::Equal,
+                        .map(|x| -> bool {
+                            match x.parse::<u32>().ok().unwrap() {
+                                0 => false,
+                                1 => true,
                                 _ => panic!("[ Error ] Ouch found something not allowed."),
                             }
                         })
-                        .collect::<Vec<Precedence>>(),
+                        .collect::<Vec<bool>>(),
                 );
             }
+           
+            if compute_handles {
+                match matrix_name {
+                    "first" => self.first = matrix.clone(),
+                    "last" => self.last = matrix.clone(),
+                    "equal" => self.equal = matrix.clone(),
+                    _ => panic!("[ Error ] Included too many matrices in input."),
+                }
+            } else {
+                match matrix_name {
+                    "yields" => self.yields = matrix.clone(),
+                    "takes" => self.takes = matrix.clone(),
+                    "equal" => self.equal = matrix.clone(),
+                    _ => panic!("[ Error ] Included too many matrices in input."),
+                }
+            }
 
-            grammar_table.table = matrix.clone();
             matrix.clear();
         }
+    } 
 
-        grammar_table
-    }
+    fn shrink_precedence(&mut self) {
+        self.create_b_matrix();
+        let length = self.rtc.len();
 
-    pub fn lookup_precedence(&self, prev_op: TableIndex, curr_op: &String) -> Precedence {
-        let curr_op_class = TableIndex::from(curr_op);
+        let mut count = 0;
+        for row in 0..length {
 
-        self.table[usize::from(prev_op)][usize::from(curr_op_class)]
-    }
+            if row < (length / 2) {
+                for col in 0..length {
+                    if self.rtc[row][col] {
+                        count += 1;
+                    }
+                }
+                self.f.push(count);
+                count = 0;
+            }
 
-    pub fn print_table(&self) {
-        let mut iter = self.table.iter();
-
-        while let Some(row) = iter.next() {
-            let parsed = row
-                .iter()
-                .map(|x| String::from(*x))
-                .collect::<Vec<String>>();
-
-            println!("{:?}", parsed);
+            if row >= (length / 2) {
+                for col in 0..length {
+                    if self.rtc[row][col] {
+                        count += 1;
+                    }
+                }
+                self.g.push(count);
+                count = 0;
+            }
         }
+    }
+
+    fn compute_handles(&mut self) {
+        let mut final_handle: Matrix;
+
+        let first_p = matrix::transitive_closure(&self.first);
+
+        final_handle = matrix::product(&self.equal, &first_p);
+
+        self.yields = final_handle.clone();
+        final_handle.clear();
+
+
+        let last_p = matrix::transitive_closure(&self.last);
+        let identity = matrix::create_identity(10);
+
+        let first_s = matrix::sum(&identity, &first_p);
+        let transposed = matrix::transpose(&last_p);
+
+        final_handle = matrix::product(&transposed, &self.equal);
+        final_handle = matrix::product(&final_handle, &first_s);
+
+        self.takes = final_handle.clone();
     }
 }

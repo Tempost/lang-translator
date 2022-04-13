@@ -1,4 +1,5 @@
 mod compiler;
+mod boolean;
 use crate::compiler::lexical::*;
 
 fn main() {

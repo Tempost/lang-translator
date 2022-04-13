@@ -92,7 +92,7 @@ impl Tokenize {
         .ok();
 
         while let Some(token) = peek_self.next() {
-            goto_state = Tokenize::table_lookup(curr_state, usize::from(token.class), "symbol_fsa");
+            goto_state = Tokenize::table_lookup(curr_state, usize::from(token.class), "fas_tables/symbol_fsa");
 
             match goto_state {
                 0 | 1 | 3 | 4 | 6 | 7 | 8 | 10 => debug_print_kek(&curr_state, &token.name, false),
@@ -251,7 +251,7 @@ impl Iterator for Tokenize {
             // Check what terminal we have
             let terminal = Terminal::from(&character);
 
-            curr_state = Tokenize::table_lookup(curr_state, usize::from(terminal), "scanner_fsa");
+            curr_state = Tokenize::table_lookup(curr_state, usize::from(terminal), "fsa_tables/scanner_fsa");
             match curr_state {
                 // Ignoring whitespace and any comment strings
                 0 | 14 | 15 => {

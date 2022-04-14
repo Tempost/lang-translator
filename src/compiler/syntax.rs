@@ -37,6 +37,7 @@ enum SyntaxClass {
 }
 
 pub struct Syntax {
+    top_of_stack: usize,
     token_iter: IntoIter<Token>,
     token_stack: TokenList,
     p_func: Vec<Vec<i32>>
@@ -65,6 +66,7 @@ impl<'a> fmt::Display for SyntaxError<'a> {
 impl Syntax {
     fn new(file: &str) -> Self {
         Syntax { 
+            top_of_stack: 0,
             token_iter: Syntax::tokens_from_memory(file),
             token_stack: Vec::new(),
             p_func: Syntax::get_precedence_func(),
@@ -111,6 +113,7 @@ impl Syntax {
     pub fn complete_analysis(&mut self) -> Result<()> {
         // Consume first token, pushing it to the stack
         self.token_stack.push(self.token_iter.next().unwrap().to_owned());
+        self.top_of_stack += 1;
 
         while let Some(token) = self.token_iter.next() {
             match token.class {

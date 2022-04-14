@@ -27,6 +27,29 @@ pub enum TokenClass {
     Literal,
     Delimiter,
     Op,
+    Program,
+    Block,
+    ConstDefPart,
+    ConstList,
+    VariableDefPart,
+    VarList,
+    ProcedureDefPart,
+    Statment,
+    SimpleStatement,
+    CallStatement,
+    ParamList,
+    IdentList,
+    CompoundStatement,
+    StatmentList,
+    IfStatement,
+    WhileStatement,
+    BoolExp,
+    RelationOp,
+    Expression,
+    AddoOp,
+    Term,
+    Mop,
+    Fac,
     Unknown,
 }
 
@@ -174,7 +197,8 @@ impl From<TokenClass> for usize {
             TokenClass::Literal => 1,
             TokenClass::Delimiter => 2,
             TokenClass::Op => 3,
-            TokenClass::Unknown => panic!("[ Error ] Cannot index unknown Token Class."),
+            TokenClass::Unknown => panic!("[ Error ] Cannot index Unknown Token Class."),
+            _ => panic!("[ Error ] Cannot index using Non-Terminal classes.")
         }
     }
 }

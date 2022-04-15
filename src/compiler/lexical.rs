@@ -87,6 +87,22 @@ fn debug_print_kek(curr_state: &usize, name: &str, flag: bool) {
     )
 }
 
+impl Token {
+    pub fn empty() -> Self {
+        Token {
+            name: String::from("Empty"),
+            class: TokenClass::Unknown,
+        }
+    }
+
+    pub fn terminator() -> Self {
+        Token {
+            name: String::from("Terminator"),
+            class: TokenClass::Delimiter,
+        }
+    }
+}
+
 impl Tokenize {
     pub fn create_scanner(filename: &str) -> io::Result<Self> {
         let contents = &fs::read_to_string(filename)
@@ -115,7 +131,11 @@ impl Tokenize {
         .ok();
 
         while let Some(token) = peek_self.next() {
-            goto_state = Tokenize::table_lookup(curr_state, usize::from(token.class), "fas_tables/symbol_fsa");
+            goto_state = Tokenize::table_lookup(
+                curr_state,
+                usize::from(token.class),
+                "fas_tables/symbol_fsa",
+            );
 
             match goto_state {
                 0 | 1 | 3 | 4 | 6 | 7 | 8 | 10 => debug_print_kek(&curr_state, &token.name, false),
@@ -198,7 +218,7 @@ impl From<TokenClass> for usize {
             TokenClass::Delimiter => 2,
             TokenClass::Op => 3,
             TokenClass::Unknown => panic!("[ Error ] Cannot index Unknown Token Class."),
-            _ => panic!("[ Error ] Cannot index using Non-Terminal classes.")
+            _ => panic!("[ Error ] Cannot index using Non-Terminal classes."),
         }
     }
 }
@@ -275,7 +295,8 @@ impl Iterator for Tokenize {
             // Check what terminal we have
             let terminal = Terminal::from(&character);
 
-            curr_state = Tokenize::table_lookup(curr_state, usize::from(terminal), "fsa_tables/scanner_fsa");
+            curr_state =
+                Tokenize::table_lookup(curr_state, usize::from(terminal), "fsa_tables/scanner_fsa");
             match curr_state {
                 // Ignoring whitespace and any comment strings
                 0 | 14 | 15 => {
@@ -395,6 +416,10 @@ impl Iterator for Tokenize {
                     match Terminal::from(peeked) {
                         Terminal::Mult => continue,
                         Terminal::Slash => continue,
+                        Terminal::Whitespace => {
+                            token.name.push(character);
+                            token.class = TokenClass::Op;
+                        },
                         _ => break,
                     }
                 }
@@ -406,7 +431,7 @@ impl Iterator for Tokenize {
         }
 
         if RESERVED_WORDS.contains(&token.name.as_str()) {
-            token.class = TokenClass::ReservedWord; 
+            token.class = TokenClass::ReservedWord;
         }
 
         // Send out token wrapped in option. Will return None to detonte end of Iter

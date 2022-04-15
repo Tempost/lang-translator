@@ -1,6 +1,6 @@
+use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
-use std::fs::File;
 
 use crate::boolean::matrix::{self, Matrix};
 
@@ -40,7 +40,7 @@ pub struct SPG {
 impl OPG {
     fn create_b_matrix(&mut self) {
         let b_matrix_len = self.m_dimension * 2;
-        let mut b_matrix: Matrix = vec![vec![false; b_matrix_len]; b_matrix_len]; 
+        let mut b_matrix: Matrix = vec![vec![false; b_matrix_len]; b_matrix_len];
 
         let takes_equal = matrix::combine_matrix(&self.takes, &self.equal);
         let yields_equal = matrix::combine_matrix(&self.yields, &self.equal);
@@ -53,15 +53,16 @@ impl OPG {
                     b_matrix[row][col] = takes_equal[row][col % (self.m_dimension)];
                 }
 
-                if row >= (self.m_dimension) && col < (self.m_dimension){
-                    b_matrix[row][col] = yields_equal[row % (self.m_dimension)][col % (self.m_dimension)];
+                if row >= (self.m_dimension) && col < (self.m_dimension) {
+                    b_matrix[row][col] =
+                        yields_equal[row % (self.m_dimension)][col % (self.m_dimension)];
                 }
             }
         }
 
-        let identity = matrix::create_identity(b_matrix_len); 
+        let identity = matrix::create_identity(b_matrix_len);
         b_matrix = matrix::transitive_closure(&b_matrix);
-        b_matrix = matrix::sum(&b_matrix, &identity); 
+        b_matrix = matrix::sum(&b_matrix, &identity);
         self.rtc = b_matrix;
     }
 }
@@ -100,7 +101,7 @@ impl PrecedenceGrammar for OPG {
 
             // Skip any blank lines in between the matrices
             if matrix_dim.is_empty() {
-                continue
+                continue;
             }
 
             let mut m_size = matrix_dim.split(' ');
@@ -137,7 +138,7 @@ impl PrecedenceGrammar for OPG {
                         .collect::<Vec<bool>>(),
                 );
             }
-           
+
             if compute_handles {
                 match matrix_name {
                     "First" => self.first = matrix.clone(),
@@ -191,9 +192,9 @@ impl PrecedenceGrammar for OPG {
         let mut final_handle: Matrix;
 
         let first_p = matrix::transitive_closure(&self.first);
-        let identity = matrix::create_identity(10); 
+        let identity = matrix::create_identity(10);
         let first_s = matrix::sum(&identity, &first_p);
-        
+
         final_handle = matrix::product(&self.equal, &first_s);
         final_handle = matrix::product(&final_handle, &self.first_term);
         self.yields = final_handle.clone();
@@ -211,7 +212,7 @@ impl PrecedenceGrammar for OPG {
 impl SPG {
     fn create_b_matrix(&mut self) {
         let b_matrix_len = self.m_dimension * 2;
-        let mut b_matrix: Matrix = vec![vec![false; b_matrix_len]; b_matrix_len]; 
+        let mut b_matrix: Matrix = vec![vec![false; b_matrix_len]; b_matrix_len];
 
         let takes_equal = matrix::combine_matrix(&self.takes, &self.equal);
         let yields_equal = matrix::combine_matrix(&self.yields, &self.equal);
@@ -224,15 +225,16 @@ impl SPG {
                     b_matrix[row][col] = takes_equal[row][col % (self.m_dimension)];
                 }
 
-                if row >= (b_matrix_len / 2) && col < (b_matrix_len / 2){
-                    b_matrix[row][col] = yields_equal[row % (self.m_dimension)][col % (self.m_dimension)];
+                if row >= (b_matrix_len / 2) && col < (b_matrix_len / 2) {
+                    b_matrix[row][col] =
+                        yields_equal[row % (self.m_dimension)][col % (self.m_dimension)];
                 }
             }
         }
 
-        let identity = matrix::create_identity(b_matrix_len); 
+        let identity = matrix::create_identity(b_matrix_len);
         b_matrix = matrix::transitive_closure(&b_matrix);
-        b_matrix = matrix::sum(&b_matrix, &identity); 
+        b_matrix = matrix::sum(&b_matrix, &identity);
         self.rtc = b_matrix;
     }
 }
@@ -248,7 +250,7 @@ impl PrecedenceGrammar for SPG {
             rtc: Vec::new(),
             f: Vec::new(),
             g: Vec::new(),
-            m_dimension: 0
+            m_dimension: 0,
         }
     }
 
@@ -297,7 +299,7 @@ impl PrecedenceGrammar for SPG {
                         .collect::<Vec<bool>>(),
                 );
             }
-           
+
             if compute_handles {
                 match matrix_name {
                     "first" => self.first = matrix.clone(),
@@ -316,7 +318,7 @@ impl PrecedenceGrammar for SPG {
 
             matrix.clear();
         }
-    } 
+    }
 
     fn shrink_precedence(&mut self) {
         self.create_b_matrix();
@@ -324,7 +326,6 @@ impl PrecedenceGrammar for SPG {
 
         let mut count = 0;
         for row in 0..length {
-
             if row < (length / 2) {
                 for col in 0..length {
                     if self.rtc[row][col] {
@@ -356,7 +357,6 @@ impl PrecedenceGrammar for SPG {
 
         self.yields = final_handle.clone();
         final_handle.clear();
-
 
         let last_p = matrix::transitive_closure(&self.last);
         let identity = matrix::create_identity(10);

@@ -11,7 +11,6 @@ type QuadList = Vec<Quads>;
 
 pub struct Syntax {
     top_of_stack: usize,
-    op_index: usize,
     token_iter: Peekable<IntoIter<Token>>,
     token_stack: TokenList,
     op_stack: TokenList,
@@ -80,7 +79,6 @@ impl Syntax {
     fn new(file: &str) -> Self {
         Syntax {
             top_of_stack: 0,
-            op_index: 0,
             token_iter: Syntax::tokens_from_memory(file),
             token_stack: Vec::new(),
             op_stack: Vec::new(),
@@ -94,23 +92,16 @@ impl Syntax {
         let mut lex = Tokenize::create_scanner(file).unwrap();
         let mut stack: TokenList = Vec::new();
 
-        // Stack requires to be wrapped in a starting/end dummy token
-        let terminator = Token::terminator();
-
-        // Analysis needs a "terminator" token on both the start and end of the stack
-        stack.push(terminator.clone());
+        // Analysis needs a "terminator" token at the start
+        stack.push(Token::terminator());
         while let Some(token) = lex.next() {
             stack.push(token);
         }
 
-        // using .clone() is avoided here since we can just consume it instead. Dropping it out of
-        // the scope
-        stack.push(terminator);
-
         stack.into_iter().peekable()
     }
 
-    fn table_lookup(&mut self, f: &Token, g: &Token) -> Handle {
+    fn table_lookup(&self, f: &Token, g: &Token) -> Handle {
         let f_index = usize::from(TableIndex::from(&f.name));
         let g_index = usize::from(TableIndex::from(&g.name));
 
@@ -139,15 +130,17 @@ impl Syntax {
         self.s_stmt();
         // }
 
+        self.op_stack.push(self.token_iter.next().unwrap().to_owned());
+        println!("{:?}\n{:?}", self.op_stack, self.token_stack);
         println!("Finished analysis!");
     }
 
     // Advance iterator to the next operator, skiping variables and literals
-    fn next_op(&mut self) -> Token {
+    fn next_op(&mut self) -> Option<Token> {
         while let Some(token) = self.token_iter.next() {
             match token.class {
                 TokenClass::ReservedWord | TokenClass::Delimiter | TokenClass::Op => {
-                    return token
+                    return Some(token)
                 }
                 TokenClass::Unknown => panic!("[ Error ] Invalid next operator."),
                 _ => {
@@ -156,21 +149,20 @@ impl Syntax {
                 }
             }
         }
-
-        panic!("[ Error ] Failed to get next operator.");
+        None
     }
 
-    fn next_token(&mut self) -> Token {
+    fn next_token(&mut self) -> Option<Token> {
         if let Some(token) = self.token_iter.next() {
-            return token;
+            return Some(token);
         } else {
-            panic!("[ Error ] Failed to get the next token")
+            None
         }
     }
 
     fn program(&mut self) {
         println!("Analysis of program.");
-        let mut token = self.next_token();
+        let mut token = self.next_token().unwrap();
 
         // NOTE: any way to just get just the ref to this value?
         let mut prev_token = self.token_stack[self.top_of_stack - 1].clone();
@@ -178,7 +170,7 @@ impl Syntax {
 
         if self.table_lookup(&prev_token, &token) == Handle::Yields {
             prev_token = token;
-            token = self.next_op();
+            token = self.next_op().unwrap();
 
             println!("Comparing: {:?} and {:?}\n", prev_token, token);
             if self.table_lookup(&prev_token, &token) == Handle::Yields {
@@ -264,61 +256,63 @@ impl Syntax {
     fn s_stmt(&mut self) {
         println!("Analysis of simple statement.");
 
-        let mut op_token = Token::empty();
+        while let Some(token) = self.next_op() {
+            let prev_token = self.op_stack.last().unwrap();
 
-        let token = self.next_op();
-        let mut prev_token = self.op_stack[self.op_index].clone();
+            println!("Comparing: {:?} and {:?}\n", prev_token, token);
 
-        println!("Comparing: {:?} and {:?}\n", prev_token, token);
-        if self.table_lookup(&prev_token, &token) == Handle::Yields {
-            op_token = token;
-            self.op_stack.push(op_token);
-            self.op_index += 1;
-            self.expression();
-        } else {
-            panic!(
-                "[ Error ] Syntax error at {} -- {}",
-                prev_token.name, token.name
-            );
+            match self.table_lookup(&prev_token, &token) {
+                Handle::Yields => {
+                    self.op_stack.push(token);
+                    self.expression();
+                },
+
+                Handle::Takes => break,
+                Handle::Equal => todo!(),
+            }
         }
-        println!("{:?}\n{:?}", self.op_stack, self.token_stack);
     }
 
     fn expression(&mut self) {
         println!("Analysis of expression.");
 
-        let mut op_token = Token::empty();
-
         self.term();
-        let token = self.next_op();
-        let mut prev_token = self.op_stack[self.op_index].clone();
+        let token = self.next_op().unwrap();
+        let prev_token = self.op_stack.last().unwrap();
 
-        println!("Comparing: {:?} and {:?}\n", prev_token, token);
-        if self.table_lookup(&prev_token, &token) == Handle::Yields {
-            op_token = token;
-            self.term();
-            self.op_stack.push(op_token);
-            self.op_index += 1;
-        } else {
-            panic!(
-                "[ Error ] Syntax error at {} -- {}",
-                prev_token.name, token.name
-            );
+        println!("Returning to expression.");
+        println!("Comparing: {:?} and {:?}\n", &prev_token, token);
+
+        match self.table_lookup(prev_token, &token) {
+            Handle::Yields => {
+                self.term();
+                self.op_stack.push(token);
+            },
+            Handle::Takes => todo!(),
+            Handle::Equal => todo!(),
         }
     }
 
     fn term(&mut self) {
         println!("Analysis of term.");
-        let mut op_token = Token::empty();
 
-        let token = self.next_op();
-        let mut prev_token = self.op_stack[self.op_index].clone();
+        self.factor();
+        
+        let token = self.next_op().unwrap();
+        let prev_token = self.op_stack.last().unwrap();
 
         println!("Comparing: {:?} and {:?}\n", prev_token, token);
-        if self.table_lookup(&prev_token, &token) == Handle::Yields {
-            op_token = token;
-            self.op_stack.push(op_token);
-            self.op_index += 1;
+
+        match self.table_lookup(&prev_token, &token) {
+            Handle::Yields => {
+                self.op_stack.push(token);
+            }
+
+            Handle::Takes => {
+                self.op_stack.push(token);
+            },
+
+            Handle::Equal => todo!(),
         }
     }
 

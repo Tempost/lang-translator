@@ -186,6 +186,7 @@ impl PrecedenceGrammar for OPG {
             }
             count = 0;
         }
+        println!("{:?}\n {:?}", &self.f, &self.g);
     }
 
     fn compute_handles(&mut self) {

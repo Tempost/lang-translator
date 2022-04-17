@@ -10,12 +10,14 @@ type TokenList = Vec<Token>;
 type QuadList = Vec<Quads>;
 
 pub struct Syntax {
-    top_of_stack: usize,
     token_iter: Peekable<IntoIter<Token>>,
     token_stack: TokenList,
     polish: TokenList,
     quad_stack: QuadList,
     p_func: PFunc,
+    top_of_stack: usize,
+    op_stack: Vec<Token>,
+    prev_op: Token,
 }
 
 struct PFunc {
@@ -84,6 +86,8 @@ impl Syntax {
             polish: Vec::new(),
             quad_stack: Vec::new(),
             p_func: PFunc::new(),
+            op_stack: Vec::new(),
+            prev_op: Token::empty(),
         }
     }
 
@@ -110,12 +114,12 @@ impl Syntax {
 
         println!("F:{} G:{}", f_val, g_val);
         if f_val > g_val {
-            println!("Takes\n");
+            println!("Takes");
             return Handle::Takes;
         }
 
         if f_val < g_val {
-            println!("Yields\n");
+            println!("Yields");
             return Handle::Yields;
         }
 
@@ -138,7 +142,7 @@ impl Syntax {
         println!("Finished analysis!");
     }
 
-    // Advance iterator to the next operator, skiping variables and literals
+    // Advance iterator to the next operator, adding variables and literals to the stacks
     fn next_op(&mut self) -> Option<Token> {
         while let Some(token) = self.token_iter.next() {
             match token.class {
@@ -147,6 +151,8 @@ impl Syntax {
                     return Some(token)
                 }
                 TokenClass::Unknown => panic!("[ Error ] Invalid next operator."),
+
+                // Add Ident or literal to stack
                 _ => {
                     self.top_of_stack += 1;
                     self.polish.push(token.clone());
@@ -157,21 +163,26 @@ impl Syntax {
         None
     }
 
+    // Search for the last operator from the processed tokens
     fn last_op(&mut self) -> Option<Token> {
-        let mut r_iter = self.token_stack.iter().rev(); 
-        while let Some(token) = r_iter.next() {
+        let mut iter = self.token_stack.iter();
+
+        while let Some(token) = iter.next_back() {
             match token.class {
                 TokenClass::ReservedWord | TokenClass::Delimiter | TokenClass::Op => {
-                    return Some(token.to_owned())
+                    return Some(token.to_owned());
                 }
-                _ => continue,
+                _ => return None,
             }
         }
         None
     }
 
+    // Advance through the input tokens
     fn next_token(&mut self) -> Option<Token> {
         if let Some(token) = self.token_iter.next() {
+            println!("NEXT TOKEN --- {}", token.name);
+            self.token_stack.push(token.clone());
             return Some(token);
         } else {
             None
@@ -272,65 +283,80 @@ impl Syntax {
     }
 
     fn s_stmt(&mut self) {
-        let mut prev_op = self.last_op().unwrap();
+        self.prev_op = self.last_op().unwrap();
         while let Some(oper) = self.next_op() {
-            
-            println!("Analysis of simple statement.");
-            println!("Comparing: {:?} and {:?}", prev_op, oper);
 
-            match self.table_lookup(&prev_op, &oper) {
+            println!("Analysis of simple statement.");
+            println!("Comparing: {:?} and {:?}", self.prev_op, oper);
+
+            match self.table_lookup(&self.prev_op, &oper) {
                 Handle::Yields => {
+                    self.prev_op = oper.clone();
+                    self.op_stack.push(oper);
+                    println!("{:?}", self.op_stack);
                     self.expression();
-                    self.polish.push(oper);
+                    self.polish.push(self.op_stack.pop().unwrap());
                 },
 
                 Handle::Takes => break,
                 Handle::Equal => todo!(),
             }
-            prev_op = self.last_op().unwrap();
+
+            while let Some(op) = self.op_stack.pop() {
+                self.polish.push(op);
+            }
         }
     }
 
     fn expression(&mut self) {
-        println!("Analysis of expression.");
-
         self.term();
-        let mut prev_op = self.last_op().unwrap();
-        while let Some(oper) = self.next_op() {
+        while let Some(oper) = self.next_token() {
 
-            println!("Returning to expression.");
-            println!("Comparing: {:?} and {:?}", &prev_op, oper);
+            println!("EXP -- Comparing: {:?} and {:?}", &self.prev_op, oper);
 
-            match self.table_lookup(&prev_op, &oper) {
+            match self.table_lookup(&self.prev_op, &oper) {
                 Handle::Yields => {
+                    self.op_stack.push(oper.clone());
                     self.term();
-                    self.polish.push(oper);
+                    println!("{:?}", self.op_stack);
+                    self.polish.push(self.op_stack.pop().unwrap());
                 },
                 Handle::Takes => break,
-                Handle::Equal => todo!(),
+                Handle::Equal => self.polish.push(oper.clone()),
             }
-            prev_op = self.last_op().unwrap();
+            self.prev_op = oper;
         }
     }
 
     fn term(&mut self) {
-        println!("Analysis of term.");
-        
-        let prev_op = self.last_op().unwrap();
-        let oper = self.next_op().unwrap();
-        println!("Comparing: {:?} and {:?}", prev_op, oper);
+        self.factor();
+        while let Some(oper) = self.next_token(){
+            println!("TERM -- Comparing: {:?} and {:?}", self.prev_op, oper);
 
-        match self.table_lookup(&prev_op, &oper) {
-            Handle::Yields => {
-                self.term();
-                self.polish.push(oper);
+            match self.table_lookup(&self.prev_op, &oper) {
+                Handle::Yields => {
+                    self.op_stack.push(oper.clone());
+                    println!("OP_STACK --- {:?}", self.op_stack);
+                }
+
+                Handle::Takes => {
+                    self.polish.push(self.op_stack.pop().unwrap());
+                    self.op_stack.push(oper.clone());
+                },
+
+                Handle::Equal => todo!(),
             }
+            self.factor();
+            self.prev_op = oper;
+        }
+    }
 
-            Handle::Takes => {
-                self.polish.push(oper);
-            },
+    fn factor(&mut self) {
+        println!("\nAnalysis of factor.");
 
-            Handle::Equal => todo!(),
+        if let Some(oper) = self.next_token() { 
+            println!("Added {} to polish.\n", oper.name);
+            self.polish.push(oper);
         }
     }
 }

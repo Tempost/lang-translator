@@ -413,12 +413,14 @@ impl Iterator for Tokenize {
                     }
 
                     // TODO: This is where we will handle division later on.
+                    println!("Peeked '{}' Char: '{}'", peeked, character);
                     match Terminal::from(peeked) {
                         Terminal::Mult => continue,
                         Terminal::Slash => continue,
                         Terminal::Whitespace => {
                             token.name.push(character);
                             token.class = TokenClass::Op;
+                            break
                         },
                         _ => break,
                     }

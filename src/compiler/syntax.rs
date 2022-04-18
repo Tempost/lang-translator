@@ -7,16 +7,14 @@ use crate::compiler::precedence::{PrecedenceGrammar, OPG};
 use crate::compiler::tableindex::TableIndex;
 
 type TokenList = Vec<Token>;
-type QuadList = Vec<Quads>;
 
 pub struct Syntax {
     token_iter: Peekable<IntoIter<Token>>,
     token_stack: TokenList,
     polish: TokenList,
-    quad_stack: QuadList,
     p_func: PFunc,
     top_of_stack: usize,
-    op_stack: Vec<Token>,
+    op_stack: TokenList,
     prev_op: Token,
 }
 
@@ -25,14 +23,7 @@ struct PFunc {
     g: Vec<i32>,
 }
 
-pub struct Quads {
-    op: Token,
-    ident1: Token,
-    ident2: Token,
-    indet3: Token,
-}
-
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 enum Handle {
     Yields,
     Takes,
@@ -84,7 +75,6 @@ impl Syntax {
             token_iter: Syntax::tokens_from_memory(file),
             token_stack: Vec::new(),
             polish: Vec::new(),
-            quad_stack: Vec::new(),
             p_func: PFunc::new(),
             op_stack: Vec::new(),
             prev_op: Token::empty(),
@@ -112,36 +102,16 @@ impl Syntax {
         let f_val = &self.p_func.f[f_index];
         let g_val = &self.p_func.g[g_index];
 
-        println!("F:{} G:{}", f_val, g_val);
         if f_val > g_val {
-            println!("Takes");
             return Handle::Takes;
         }
 
         if f_val < g_val {
-            println!("Yields");
             return Handle::Yields;
         }
 
         Handle::Equal
     }
-
-    pub fn complete_analysis(&mut self) {
-        // Consume first token pushing it to the stack, always a indicator to the start of input
-        self.token_stack
-            .push(self.token_iter.next().unwrap());
-
-        // Peek next value, if we have a token to parse we will contuine parsing.
-        // Handles multiple functions
-        // while let Some(_) = self.token_iter.peek() {
-        self.s_stmt();
-        // }
-
-        self.polish.iter().for_each(|x| println!("{}", x.name));
-
-        println!("Finished analysis!");
-    }
-
     // Advance iterator to the next operator, adding variables and literals to the stacks
     fn next_op(&mut self) -> Option<Token> {
         while let Some(token) = self.token_iter.next() {
@@ -181,12 +151,21 @@ impl Syntax {
     // Advance through the input tokens
     fn next_token(&mut self) -> Option<Token> {
         if let Some(token) = self.token_iter.next() {
-            println!("NEXT TOKEN --- {}", token.name);
             self.token_stack.push(token.clone());
             return Some(token);
         } else {
             None
         }
+    }
+
+    pub fn complete_analysis(&mut self) -> Result<(),()> {
+        // Consume first token pushing it to the stack, always a indicator to the start of input
+        self.token_stack
+            .push(self.token_iter.next().unwrap());
+
+        self.s_stmt();
+
+        Ok(())
     }
 
     fn program(&mut self) {
@@ -286,14 +265,10 @@ impl Syntax {
         self.prev_op = self.last_op().unwrap();
         while let Some(oper) = self.next_op() {
 
-            println!("Analysis of simple statement.");
-            println!("Comparing: {:?} and {:?}", self.prev_op, oper);
-
             match self.table_lookup(&self.prev_op, &oper) {
                 Handle::Yields => {
                     self.prev_op = oper.clone();
                     self.op_stack.push(oper);
-                    println!("{:?}", self.op_stack);
                     self.expression();
                     self.polish.push(self.op_stack.pop().unwrap());
                 },
@@ -312,13 +287,11 @@ impl Syntax {
         self.term();
         while let Some(oper) = self.next_token() {
 
-            println!("EXP -- Comparing: {:?} and {:?}", &self.prev_op, oper);
 
             match self.table_lookup(&self.prev_op, &oper) {
                 Handle::Yields => {
                     self.op_stack.push(oper.clone());
                     self.term();
-                    println!("{:?}", self.op_stack);
                     self.polish.push(self.op_stack.pop().unwrap());
                 },
                 Handle::Takes => break,
@@ -331,12 +304,10 @@ impl Syntax {
     fn term(&mut self) {
         self.factor();
         while let Some(oper) = self.next_token(){
-            println!("TERM -- Comparing: {:?} and {:?}", self.prev_op, oper);
 
             match self.table_lookup(&self.prev_op, &oper) {
                 Handle::Yields => {
                     self.op_stack.push(oper.clone());
-                    println!("OP_STACK --- {:?}", self.op_stack);
                 }
 
                 Handle::Takes => {
@@ -352,11 +323,12 @@ impl Syntax {
     }
 
     fn factor(&mut self) {
-        println!("\nAnalysis of factor.");
-
         if let Some(oper) = self.next_token() { 
-            println!("Added {} to polish.\n", oper.name);
-            self.polish.push(oper);
+            if oper.class != TokenClass::Delimiter {
+                self.polish.push(oper);
+            } else {
+                self.expression();
+            }
         }
     }
 }
@@ -367,8 +339,20 @@ mod test {
     use super::*;
 
     #[test]
-    fn syntax_ok() {
+    fn syntax_test1() {
+        let mut syn = Syntax::new("test1.java");
+        syn.complete_analysis();
+    }
+
+    #[test]
+    fn syntax_test2() {
         let mut syn = Syntax::new("test2.java");
+        syn.complete_analysis();
+    }
+    #[test]
+
+    fn syntax_test3() {
+        let mut syn = Syntax::new("test3.java");
         syn.complete_analysis();
     }
 }

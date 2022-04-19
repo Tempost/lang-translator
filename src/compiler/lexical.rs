@@ -1,5 +1,6 @@
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, Write};
+use std::path::Path;
 use std::iter::Peekable;
 use std::vec::IntoIter;
 
@@ -57,6 +58,21 @@ pub enum TokenClass {
 pub struct Token {
     pub name: String,
     pub class: TokenClass,
+}
+
+impl From<&str> for TokenClass {
+    fn from(class: &str) -> Self {
+        match class {
+            "Identifier" => TokenClass::Identifier,
+            "ReservedWord" => TokenClass::ReservedWord,
+            "Literal" => TokenClass::Literal,
+            "Delimiter" => TokenClass::Delimiter,
+            "Op"=> TokenClass::Op,
+            "RelationOp" => TokenClass::RelationOp,
+            "Mop" => TokenClass::Mop,
+            e => panic!("[ Error ] Could not parse: {}", e),
+        }
+    }
 }
 
 pub struct Tokenize {
@@ -141,26 +157,26 @@ impl Tokenize {
                 0 | 1 | 3 | 4 | 6 | 7 | 8 | 10 => debug_print_kek(&curr_state, &token.name, false),
 
                 2 => {
-                    Tokenize::write_token(&mut file, &token.name, "$function", &addr);
+                    Tokenize::token_to_table(&mut file, &token.name, "$function", &addr);
                     debug_print_kek(&curr_state, &token.name, true)
                 }
 
                 5 => {
-                    Tokenize::write_token(&mut file, &token.name, "Constvar", &addr);
+                    Tokenize::token_to_table(&mut file, &token.name, "Constvar", &addr);
 
                     addr += 2;
                     debug_print_kek(&curr_state, &token.name, true)
                 }
 
                 9 => {
-                    Tokenize::write_token(&mut file, &token.name, "Var", &addr);
+                    Tokenize::token_to_table(&mut file, &token.name, "Var", &addr);
 
                     addr += 2;
                     debug_print_kek(&curr_state, &token.name, true)
                 }
 
                 11 => {
-                    Tokenize::write_token(&mut file, &token.name, "Literal", &addr);
+                    Tokenize::token_to_table(&mut file, &token.name, "Literal", &addr);
 
                     addr += 2;
                     debug_print_kek(&curr_state, &token.name, true)
@@ -177,14 +193,26 @@ impl Tokenize {
         }
     }
 
-    // Little helper function to avoid repeating code when writing the symbol table
-    // TODO: Error handling in the case where we have trouble writing to the file
-    fn write_token(mut file: &File, name: &str, class: &str, addr: &u32) {
+    fn token_to_table(mut file: &File, name: &str, class: &str, addr: &u32) {
         file.write_fmt(format_args!(
             "{:<6} {:<10} {:<5} {:<7} {}\n",
             name, class, "", addr, "CS"
         ))
         .ok();
+    }
+
+    pub fn token_to_file(token: Token) {
+        // let file_res: io::Result<File>;
+        let path = Path::new("tokens");
+        if !path.exists() {
+            File::create("tokens").expect("[ Error ] Something went wrong creating file.");
+        }
+
+        let mut file = OpenOptions::new().write(true).append(true).open("tokens").unwrap();
+
+        if let Err(e) = writeln!(file, "{} {:?}", token.name, token.class) {
+            eprintln!("{}, could not write to file.", e);
+        }
     }
 
     // Using a predefined state table located in a file to perform row col look up
@@ -419,8 +447,8 @@ impl Iterator for Tokenize {
                         Terminal::Whitespace => {
                             token.name.push(character);
                             token.class = TokenClass::Op;
-                            break
-                        },
+                            break;
+                        }
                         _ => break,
                     }
                 }

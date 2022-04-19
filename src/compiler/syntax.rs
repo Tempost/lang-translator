@@ -1,5 +1,8 @@
 use std::iter::Peekable;
 use std::vec::IntoIter;
+use std::error::Error;
+use std::fs::File;
+use std::io::{self, BufRead};
 
 // Take tokens from lex portion of the code
 use crate::compiler::lexical::{Token, TokenClass, Tokenize};
@@ -69,10 +72,17 @@ impl PFunc {
 }
 
 impl Syntax {
-    fn new(file: &str) -> Self {
+    fn new(file: &str, flag: bool) -> Self {
+        let tokens: Peekable<IntoIter<Token>>;
+        if flag {
+           tokens = Syntax::tokens_from_memory(file); 
+        } else {
+            tokens = Syntax::tokens_from_file(file);
+        }
+
         Syntax {
             top_of_stack: 0,
-            token_iter: Syntax::tokens_from_memory(file),
+            token_iter: tokens,
             token_stack: Vec::new(),
             polish: Vec::new(),
             p_func: PFunc::new(),
@@ -93,6 +103,43 @@ impl Syntax {
         }
 
         stack.into_iter().peekable()
+    }
+
+    fn parse_token(stack: &mut TokenList, line: io::Result<String>) {
+        match line {
+            Ok(token) => {
+                let mut iter = token.split_whitespace();
+                let name = iter.next().unwrap();
+                let class = TokenClass::from(iter.next().unwrap());
+
+                stack.push(Token {
+                    name: name.to_string(),
+                    class
+                });
+            }
+
+            Err(e) => panic!("{:?}", e),
+        }
+    }
+
+    pub fn tokens_from_file(file: &str) -> Peekable<IntoIter<Token>> {
+        let token_file = File::open(file);
+
+        match token_file {
+            Ok(file) =>  {
+                let buf = io::BufReader::new(file);
+                let mut stack: TokenList = Vec::new();
+                
+                stack.push(Token::terminator());
+                for line in buf.lines() {
+                    Syntax::parse_token(&mut stack, line);
+                }
+                println!("{:?}", &stack);
+                stack.into_iter().peekable()
+            }
+            Err(e) => panic!("{}", e),
+        }
+
     }
 
     fn table_lookup(&self, f: &Token, g: &Token) -> Handle {
@@ -118,7 +165,7 @@ impl Syntax {
             match token.class {
                 TokenClass::ReservedWord | TokenClass::Delimiter | TokenClass::Op => {
                     self.token_stack.push(token.clone());
-                    return Some(token)
+                    return Some(token);
                 }
                 TokenClass::Unknown => panic!("[ Error ] Invalid next operator."),
 
@@ -158,14 +205,11 @@ impl Syntax {
         }
     }
 
-    pub fn complete_analysis(&mut self) -> Result<(),()> {
+    pub fn complete_analysis(&mut self) {
         // Consume first token pushing it to the stack, always a indicator to the start of input
-        self.token_stack
-            .push(self.token_iter.next().unwrap());
+        self.token_stack.push(self.token_iter.next().unwrap());
 
         self.s_stmt();
-
-        Ok(())
     }
 
     fn program(&mut self) {
@@ -264,14 +308,13 @@ impl Syntax {
     fn s_stmt(&mut self) {
         self.prev_op = self.last_op().unwrap();
         while let Some(oper) = self.next_op() {
-
             match self.table_lookup(&self.prev_op, &oper) {
                 Handle::Yields => {
                     self.prev_op = oper.clone();
                     self.op_stack.push(oper);
                     self.expression();
                     self.polish.push(self.op_stack.pop().unwrap());
-                },
+                }
 
                 Handle::Takes => break,
                 Handle::Equal => todo!(),
@@ -286,14 +329,12 @@ impl Syntax {
     fn expression(&mut self) {
         self.term();
         while let Some(oper) = self.next_token() {
-
-
             match self.table_lookup(&self.prev_op, &oper) {
                 Handle::Yields => {
                     self.op_stack.push(oper.clone());
                     self.term();
                     self.polish.push(self.op_stack.pop().unwrap());
-                },
+                }
                 Handle::Takes => break,
                 Handle::Equal => self.polish.push(oper.clone()),
             }
@@ -303,8 +344,7 @@ impl Syntax {
 
     fn term(&mut self) {
         self.factor();
-        while let Some(oper) = self.next_token(){
-
+        while let Some(oper) = self.next_token() {
             match self.table_lookup(&self.prev_op, &oper) {
                 Handle::Yields => {
                     self.op_stack.push(oper.clone());
@@ -313,7 +353,7 @@ impl Syntax {
                 Handle::Takes => {
                     self.polish.push(self.op_stack.pop().unwrap());
                     self.op_stack.push(oper.clone());
-                },
+                }
 
                 Handle::Equal => todo!(),
             }
@@ -323,7 +363,7 @@ impl Syntax {
     }
 
     fn factor(&mut self) {
-        if let Some(oper) = self.next_token() { 
+        if let Some(oper) = self.next_token() {
             if oper.class != TokenClass::Delimiter {
                 self.polish.push(oper);
             } else {
@@ -340,19 +380,29 @@ mod test {
 
     #[test]
     fn syntax_test1() {
-        let mut syn = Syntax::new("test1.java");
+        let mut syn = Syntax::new("test1.java", true);
         syn.complete_analysis();
     }
 
     #[test]
     fn syntax_test2() {
-        let mut syn = Syntax::new("test2.java");
+        let mut syn = Syntax::new("test2.java", true);
         syn.complete_analysis();
     }
-    #[test]
 
+    #[test]
     fn syntax_test3() {
-        let mut syn = Syntax::new("test3.java");
+        let mut syn = Syntax::new("test3.java", true);
+        syn.complete_analysis();
+    }
+
+    #[test]
+    fn syntax_test4() {
+        let mut lex = Tokenize::create_scanner("test3.java").unwrap();
+        while let Some(token) = lex.next() {
+            Tokenize::token_to_file(token);
+        }
+        let mut syn = Syntax::new("tokens", false);
         syn.complete_analysis();
     }
 }

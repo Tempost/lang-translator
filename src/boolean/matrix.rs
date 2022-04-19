@@ -95,9 +95,9 @@ pub fn print_matrix(m: &Matrix) {
     }
 }
 
-pub fn create_identity(size: usize) -> Matrix{
+pub fn create_identity(size: usize) -> Matrix {
     let mut identity: Matrix = vec![vec![false; size]; size];
-    
+
     for row in 0..size {
         for col in 0..size {
             if row == col {

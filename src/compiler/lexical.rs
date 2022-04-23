@@ -117,6 +117,14 @@ impl Token {
             class: TokenClass::Delimiter,
         }
     }
+
+    pub fn temp_gen(id: i32) -> Self {
+        let string = String::from("temp") + &id.to_string();
+        Token {
+            name: string,
+            class: TokenClass::Identifier,
+        }
+    }
 }
 
 impl Tokenize {

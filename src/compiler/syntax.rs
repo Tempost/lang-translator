@@ -1,8 +1,9 @@
+use std::fmt;
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, BufRead, Write};
 use std::iter::Peekable;
+use std::path::Path;
 use std::vec::IntoIter;
-use std::error::Error;
-use std::fs::File;
-use std::io::{self, BufRead};
 
 // Take tokens from lex portion of the code
 use crate::compiler::lexical::{Token, TokenClass, Tokenize};
@@ -10,11 +11,13 @@ use crate::compiler::precedence::{PrecedenceGrammar, OPG};
 use crate::compiler::tableindex::TableIndex;
 
 type TokenList = Vec<Token>;
+pub type QuadList = Vec<Quad>;
 
 pub struct Syntax {
     token_iter: Peekable<IntoIter<Token>>,
     token_stack: TokenList,
-    polish: TokenList,
+    pub polish: TokenList,
+    pub quads: QuadList,
     p_func: PFunc,
     top_of_stack: usize,
     op_stack: TokenList,
@@ -26,27 +29,19 @@ struct PFunc {
     g: Vec<i32>,
 }
 
+pub struct Quad {
+    op: Token,
+    param_one: Token,
+    param_two: Token,
+    temp: Token,
+}
+
 #[derive(PartialEq, Eq)]
 enum Handle {
     Yields,
     Takes,
     Equal,
 }
-
-// type Result<'a, T> = std::result::Result<T, SyntaxError<'a>>;
-
-// #[derive(Debug, PartialEq, Eq)]
-// pub struct SyntaxError<'a>(&'a str, TokenClass);
-
-// impl<'a> fmt::Display for SyntaxError<'a> {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         write!(
-//             f,
-//             "[ Syntax Error ] at token name: {} class: {:?}",
-//             self.0, self.1
-//         )
-//     }
-// }
 
 impl PFunc {
     fn new() -> Self {
@@ -71,11 +66,40 @@ impl PFunc {
     }
 }
 
+impl fmt::Display for Quad {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{},{},{},{}\n",
+            self.op.name, self.param_one.name, self.param_two.name, self.temp.name
+        )
+    }
+}
+
+fn write(quads: QuadList) {
+    if Path::new("quads").exists() {
+        fs::remove_file("quads").unwrap();
+    }
+
+    let mut file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .append(true)
+        .open("quads")
+        .unwrap();
+
+    let mut iter = quads.iter();
+    while let Some(quad) = iter.next() {
+        file.write_fmt(format_args!("{}", quad))
+            .expect("[ Error ] Problem writing to quad file.");
+    }
+}
+
 impl Syntax {
-    fn new(file: &str, flag: bool) -> Self {
+    pub fn new(file: &str, flag: bool) -> Self {
         let tokens: Peekable<IntoIter<Token>>;
         if flag {
-           tokens = Syntax::tokens_from_memory(file); 
+            tokens = Syntax::tokens_from_memory(file);
         } else {
             tokens = Syntax::tokens_from_file(file);
         }
@@ -85,6 +109,7 @@ impl Syntax {
             token_iter: tokens,
             token_stack: Vec::new(),
             polish: Vec::new(),
+            quads: Vec::new(),
             p_func: PFunc::new(),
             op_stack: Vec::new(),
             prev_op: Token::empty(),
@@ -92,7 +117,7 @@ impl Syntax {
     }
 
     // Return a stack of iterable tokens
-    fn tokens_from_memory(file: &str) -> Peekable<IntoIter<Token>> {
+    pub fn tokens_from_memory(file: &str) -> Peekable<IntoIter<Token>> {
         let mut lex = Tokenize::create_scanner(file).unwrap();
         let mut stack: TokenList = Vec::new();
 
@@ -105,6 +130,67 @@ impl Syntax {
         stack.into_iter().peekable()
     }
 
+    pub fn tokens_from_file(file: &str) -> Peekable<IntoIter<Token>> {
+        let token_file = File::open(file);
+
+        match token_file {
+            Ok(file) => {
+                let buf = io::BufReader::new(file);
+                let mut stack: TokenList = Vec::new();
+
+                stack.push(Token::terminator());
+                for line in buf.lines() {
+                    Syntax::parse_token(&mut stack, line);
+                }
+                stack.into_iter().peekable()
+            }
+            Err(e) => panic!("{}", e),
+        }
+    }
+
+    pub fn consume_polish(&mut self) -> Result<(), ()> {
+        // loop until next op
+        let mut pol_iter = self.polish.iter();
+        let mut param_stack: TokenList = Vec::new();
+        let mut quads: QuadList = Vec::new();
+        let mut temp_id = 1;
+
+        loop {
+            if let Some(token) = pol_iter.next() {
+                match token.class {
+                    TokenClass::Op => {
+                        if !token.name.eq(&String::from("=")) {
+                            let temp = Token::temp_gen(temp_id);
+                            temp_id += 1;
+
+                            quads.push(Quad {
+                                op: token.to_owned(),
+                                param_one: param_stack.pop().unwrap(),
+                                param_two: param_stack.pop().unwrap(),
+                                temp: temp.clone(),
+                            });
+                            param_stack.push(temp);
+                        } else {
+                            quads.push(Quad {
+                                op: token.to_owned(),
+                                param_one: param_stack.pop().unwrap(),
+                                param_two: param_stack.pop().unwrap(),
+                                temp: Token::empty(),
+                            });
+                        }
+                    }
+                    TokenClass::Delimiter => continue,
+                    TokenClass::ReservedWord => continue,
+                    _ => param_stack.push(token.to_owned()),
+                }
+            } else {
+                break;
+            }
+        }
+        write(quads);
+        Ok(())
+    }
+
     fn parse_token(stack: &mut TokenList, line: io::Result<String>) {
         match line {
             Ok(token) => {
@@ -114,32 +200,12 @@ impl Syntax {
 
                 stack.push(Token {
                     name: name.to_string(),
-                    class
+                    class,
                 });
             }
 
             Err(e) => panic!("{:?}", e),
         }
-    }
-
-    pub fn tokens_from_file(file: &str) -> Peekable<IntoIter<Token>> {
-        let token_file = File::open(file);
-
-        match token_file {
-            Ok(file) =>  {
-                let buf = io::BufReader::new(file);
-                let mut stack: TokenList = Vec::new();
-                
-                stack.push(Token::terminator());
-                for line in buf.lines() {
-                    Syntax::parse_token(&mut stack, line);
-                }
-                println!("{:?}", &stack);
-                stack.into_iter().peekable()
-            }
-            Err(e) => panic!("{}", e),
-        }
-
     }
 
     fn table_lookup(&self, f: &Token, g: &Token) -> Handle {
@@ -159,6 +225,7 @@ impl Syntax {
 
         Handle::Equal
     }
+
     // Advance iterator to the next operator, adding variables and literals to the stacks
     fn next_op(&mut self) -> Option<Token> {
         while let Some(token) = self.token_iter.next() {
@@ -382,26 +449,31 @@ mod test {
     fn syntax_test1() {
         let mut syn = Syntax::new("test1.java", true);
         syn.complete_analysis();
+        syn.consume_polish().unwrap();
     }
 
     #[test]
     fn syntax_test2() {
         let mut syn = Syntax::new("test2.java", true);
         syn.complete_analysis();
+        syn.consume_polish().unwrap();
     }
 
     #[test]
     fn syntax_test3() {
         let mut syn = Syntax::new("test3.java", true);
         syn.complete_analysis();
+        syn.consume_polish().unwrap();
     }
 
     #[test]
     fn syntax_test4() {
         let mut lex = Tokenize::create_scanner("test3.java").unwrap();
+
         while let Some(token) = lex.next() {
             Tokenize::token_to_file(token);
         }
+
         let mut syn = Syntax::new("tokens", false);
         syn.complete_analysis();
     }

@@ -76,25 +76,6 @@ impl fmt::Display for Quad {
     }
 }
 
-fn write(quads: QuadList) {
-    if Path::new("quads").exists() {
-        fs::remove_file("quads").unwrap();
-    }
-
-    let mut file = OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .append(true)
-        .open("quads")
-        .unwrap();
-
-    let mut iter = quads.iter();
-    while let Some(quad) = iter.next() {
-        file.write_fmt(format_args!("{}", quad))
-            .expect("[ Error ] Problem writing to quad file.");
-    }
-}
-
 impl Syntax {
     pub fn new(file: &str, flag: bool) -> Self {
         let tokens: Peekable<IntoIter<Token>>;
@@ -187,7 +168,7 @@ impl Syntax {
                 break;
             }
         }
-        write(quads);
+        self.quads = quads;
         Ok(())
     }
 

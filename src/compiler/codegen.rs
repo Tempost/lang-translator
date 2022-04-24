@@ -3,21 +3,19 @@ use std::fs::{ self, File, OpenOptions };
 use std::io::{self, BufRead, Write, BufReader};
 use std::path::Path;
 
-use crate::compiler::syntax::QuadList;
+use std::vec::IntoIter;
+
+use crate::compiler::syntax::{ Quad, QuadList };
 
 type Result<'a, T> = std::result::Result<T, GeneratorErr<'a>>;
 type AsmSnippet = Vec<String>;
-
-trait Snippet {
-    fn new(quads: QuadList) -> Self;
-}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct GeneratorErr<'a>(&'a str, AsmSnippet);
 
 struct Generator {
     assembly: Vec<AsmSnippet>,
-    quads: QuadList,
+    quads: IntoIter<Quad>,
     asm_file: File,
 }
 
@@ -27,7 +25,7 @@ impl<'a> fmt::Display for GeneratorErr<'a> {
     }
 }
 
-impl Snippet for Generator {
+impl Generator {
     fn new(quads: QuadList) -> Self {
         if Path::new("code.asm").exists() {
             fs::remove_file("code.asm").unwrap();
@@ -40,15 +38,20 @@ impl Snippet for Generator {
 
         Generator { 
             assembly: Vec::new(),
-            quads,
+            quads: quads.into_iter(),
             asm_file: file
         }
     }
-}
 
-impl Generator {
-    fn consume_quads(&mut self, file: &str) -> Result<AsmSnippet> {
+    fn consume_quads(&mut self) -> Result<AsmSnippet> {
         let snippet: AsmSnippet = Vec::new();
+
+        // Match on the different operators
+        // output the assembly to a file
+        while let Some(quad) = self.quads.next() {
+            println!("{}", quad);
+        }
+
         Ok(snippet)
     }
 }
@@ -76,7 +79,8 @@ mod test {
         let mut syn = Syntax::new("test2.java", true);
         syn.complete_analysis();
         syn.consume_polish().unwrap();
-        let gen = Generator::new(syn.quads);
-        gen.quads.iter().for_each(|x| println!("{}", x));
+
+        let mut gen = Generator::new(syn.quads);
+        gen.consume_quads();
     }
 }

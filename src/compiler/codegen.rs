@@ -53,7 +53,7 @@ impl Generator {
                 TokenClass::Op => match quad.op.name.as_str() {
                     "+" => {
                         let res = self.asm_file.write_fmt(format_args!(
-                            "mov ax [{}]\nadd ax [{}]\nmov [{}] ax\n",
+                            "mov ax,[{}]\nadd ax,[{}]\nmov [{}],ax\n",
                             quad.param_two.name, quad.param_one.name, quad.temp.name
                         ));
 
@@ -64,7 +64,7 @@ impl Generator {
 
                     "-" => {
                         let res = self.asm_file.write_fmt(format_args!(
-                            "mov ax [{}]\nsub ax [{}]\nmov [{}] ax\n",
+                            "mov ax,[{}]\nsub ax,[{}]\nmov [{}],ax\n",
                             quad.param_two.name, quad.param_one.name, quad.temp.name
                         ));
 
@@ -75,7 +75,7 @@ impl Generator {
 
                     "/" => {
                         let res = self.asm_file.write_fmt(format_args!(
-                            "mov dx 0\nmov ax [{}]\nmov bx [{}]\ndiv bx\nmov [{}] ax\n",
+                            "mov dx,0\nmov ax,[{}]\nmov bx,[{}]\ndiv bx\nmov [{}],ax\n",
                             quad.param_two.name, quad.param_one.name, quad.temp.name
                         ));
 
@@ -86,7 +86,7 @@ impl Generator {
 
                     "*" => {
                         let res = self.asm_file.write_fmt(format_args!(
-                            "mov ax [{}]\nmul [{}]\nmov [{}] ax\n",
+                            "mov ax,[{}]\nmov bx,[{}]\nmul bx\nmov [{}],ax\n",
                             quad.param_two.name, quad.param_one.name, quad.temp.name
                         ));
 
@@ -97,8 +97,8 @@ impl Generator {
 
                     "=" => {
                         let res = self.asm_file.write_fmt(format_args!(
-                            "mov [{}] [{}]\n",
-                            quad.param_two.name, quad.param_one.name
+                            "mov ax,[{}]\nmov [{}],ax\n",
+                            quad.param_one.name, quad.param_two.name
                         ));
 
                         if res.is_err() {

@@ -29,11 +29,12 @@ struct PFunc {
     g: Vec<i32>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Quad {
-    op: Token,
-    param_one: Token,
-    param_two: Token,
-    temp: Token,
+    pub op: Token,
+    pub param_one: Token,
+    pub param_two: Token,
+    pub temp: Token,
 }
 
 #[derive(PartialEq, Eq)]

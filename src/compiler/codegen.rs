@@ -1,27 +1,25 @@
 use std::fmt;
-use std::fs::{ self, File, OpenOptions };
-use std::io::{self, BufRead, Write, BufReader};
+use std::fs::{self, File, OpenOptions};
+use std::io::Write;
 use std::path::Path;
-
 use std::vec::IntoIter;
 
-use crate::compiler::syntax::{ Quad, QuadList };
+use crate::compiler::lexical::TokenClass;
+use crate::compiler::syntax::{Quad, QuadList};
 
-type Result<'a, T> = std::result::Result<T, GeneratorErr<'a>>;
-type AsmSnippet = Vec<String>;
+type Result<T> = std::result::Result<T, GeneratorErr>;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct GeneratorErr<'a>(&'a str, AsmSnippet);
+pub struct GeneratorErr(Quad);
 
 struct Generator {
-    assembly: Vec<AsmSnippet>,
     quads: IntoIter<Quad>,
     asm_file: File,
 }
 
-impl<'a> fmt::Display for GeneratorErr<'a> {
+impl<'a> fmt::Display for GeneratorErr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[ Error ] {} : {:?}", self.0, self.1)
+        write!(f, "{:?}", self.0)
     }
 }
 
@@ -31,28 +29,103 @@ impl Generator {
             fs::remove_file("code.asm").unwrap();
         }
 
-        let file = OpenOptions::new().create_new(true)
+        let file = OpenOptions::new()
+            .create_new(true)
             .write(true)
             .open("code.asm")
             .unwrap();
 
-        Generator { 
-            assembly: Vec::new(),
+        Generator {
             quads: quads.into_iter(),
-            asm_file: file
+            asm_file: file,
         }
     }
 
-    fn consume_quads(&mut self) -> Result<AsmSnippet> {
-        let snippet: AsmSnippet = Vec::new();
+    fn consume_quads(&mut self) -> Result<()> {
+        // let label_loc = 0;
+        // let fix_up: Vec<(i32, &str)> = Vec::new();
 
         // Match on the different operators
         // output the assembly to a file
         while let Some(quad) = self.quads.next() {
-            println!("{}", quad);
+            match quad.op.class {
+                TokenClass::ReservedWord => todo!(),
+                TokenClass::Op => match quad.op.name.as_str() {
+                    "+" => {
+                        let res = self.asm_file.write_fmt(format_args!(
+                            "mov ax [{}]\nadd ax [{}]\nmov [{}] ax\n",
+                            quad.param_two.name, quad.param_one.name, quad.temp.name
+                        ));
+
+                        if res.is_err() {
+                            return Err(GeneratorErr(quad));
+                        }
+                    }
+
+                    "-" => {
+                        let res = self.asm_file.write_fmt(format_args!(
+                            "mov ax [{}]\nsub ax [{}]\nmov [{}] ax\n",
+                            quad.param_two.name, quad.param_one.name, quad.temp.name
+                        ));
+
+                        if res.is_err() {
+                            return Err(GeneratorErr(quad));
+                        }
+                    }
+
+                    "/" => {
+                        let res = self.asm_file.write_fmt(format_args!(
+                            "mov dx 0\nmov ax [{}]\nmov bx [{}]\ndiv bx\nmov [{}] ax\n",
+                            quad.param_two.name, quad.param_one.name, quad.temp.name
+                        ));
+
+                        if res.is_err() {
+                            return Err(GeneratorErr(quad));
+                        }
+                    }
+
+                    "*" => {
+                        let res = self.asm_file.write_fmt(format_args!(
+                            "mov ax [{}]\nmul [{}]\nmov [{}] ax\n",
+                            quad.param_two.name, quad.param_one.name, quad.temp.name
+                        ));
+
+                        if res.is_err() {
+                            return Err(GeneratorErr(quad));
+                        }
+                    }
+
+                    "=" => {
+                        let res = self.asm_file.write_fmt(format_args!(
+                            "mov [{}] [{}]\n",
+                            quad.param_two.name, quad.param_one.name
+                        ));
+
+                        if res.is_err() {
+                            return Err(GeneratorErr(quad));
+                        }
+                    }
+
+                    e => {
+                        if Path::new("code.asm").exists() {
+                            fs::remove_file("code.asm").unwrap();
+                        }
+                        panic!("[ Error ] Not a valid operator, {}", e)
+                    }
+                },
+                TokenClass::BoolExp => todo!(),
+                TokenClass::RelationOp => todo!(),
+                TokenClass::Unknown => todo!(),
+                _ => {
+                    if Path::new("code.asm").exists() {
+                        fs::remove_file("code.asm").unwrap();
+                    }
+                    panic!("[ Error ] Some how this made it past syntax analysis?")
+                }
+            }
         }
 
-        Ok(snippet)
+        Ok(())
     }
 }
 
@@ -64,13 +137,12 @@ mod test {
 
     #[test]
     fn new_file() {
-
         fn type_of<T>(_: T) -> &'static str {
             type_name::<T>()
         }
 
         let file = File::open("code.asm").unwrap();
-        let gen = Generator::new(Vec::new()); 
+        let gen = Generator::new(Vec::new());
         assert_eq!(type_of(file), type_of(gen.asm_file));
     }
 
@@ -81,6 +153,9 @@ mod test {
         syn.consume_polish().unwrap();
 
         let mut gen = Generator::new(syn.quads);
-        gen.consume_quads();
+        let res = gen.consume_quads();
+        let check_res = res.is_ok();
+
+        assert!(check_res);
     }
 }

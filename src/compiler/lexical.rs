@@ -54,7 +54,7 @@ pub enum TokenClass {
     Unknown,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
     pub name: String,
     pub class: TokenClass,

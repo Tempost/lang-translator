@@ -1,7 +1,7 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, Write};
-use std::path::Path;
 use std::iter::Peekable;
+use std::path::Path;
 use std::vec::IntoIter;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -67,7 +67,7 @@ impl From<&str> for TokenClass {
             "ReservedWord" => TokenClass::ReservedWord,
             "Literal" => TokenClass::Literal,
             "Delimiter" => TokenClass::Delimiter,
-            "Op"=> TokenClass::Op,
+            "Op" => TokenClass::Op,
             "RelationOp" => TokenClass::RelationOp,
             "Mop" => TokenClass::Mop,
             e => panic!("[ Error ] Could not parse: {}", e),
@@ -199,7 +199,11 @@ impl Tokenize {
             File::create("tokens").expect("[ Error ] Something went wrong creating file.");
         }
 
-        let mut file = OpenOptions::new().write(true).append(true).open("tokens").unwrap();
+        let mut file = OpenOptions::new()
+            .write(true)
+            .append(true)
+            .open("tokens")
+            .unwrap();
 
         if let Err(e) = writeln!(file, "{} {:?}", token.name, token.class) {
             eprintln!("{}, could not write to file.", e);
@@ -464,7 +468,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn sym_table() { 
+    fn sym_table() {
         let mut lex = Tokenize::create_scanner("test2.java").unwrap();
         lex.create_symbol_table("symbols");
     }

@@ -35,6 +35,8 @@ impl Generator {
             .open("code.asm")
             .unwrap();
 
+        //Fill .data and .bss section with information from the symbol table
+
         Generator {
             quads: quads.into_iter(),
             asm_file: file,

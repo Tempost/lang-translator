@@ -47,7 +47,7 @@ pub enum TokenClass {
     BoolExp,
     RelationOp,
     Expression,
-    AddoOp,
+    AddOp,
     Term,
     Mop,
     Fac,
@@ -143,7 +143,6 @@ impl Tokenize {
             fs::File::create(filename).expect("[ ERROR ] Something went wrong creating the file.");
 
         // Make our token iterator peekable
-        let mut peek_self = self.peekable();
         let mut curr_state: usize = 0;
         let mut goto_state: usize;
         let mut addr: u32 = 0;
@@ -154,46 +153,30 @@ impl Tokenize {
         ))
         .ok();
 
-        while let Some(token) = peek_self.next() {
+        while let Some(token) = self.next() {
             goto_state = Tokenize::table_lookup(
                 curr_state,
                 usize::from(token.class),
-                "fas_tables/symbol_fsa",
+                "fsa_tables/symbol_fsa",
             );
 
             match goto_state {
-                0 | 1 | 3 | 4 | 6 | 7 | 8 | 10 => debug_print_kek(&curr_state, &token.name, false),
-
-                2 => {
-                    Tokenize::token_to_table(&mut file, &token.name, "$function", &addr);
-                    debug_print_kek(&curr_state, &token.name, true)
-                }
-
-                5 => {
-                    Tokenize::token_to_table(&mut file, &token.name, "Constvar", &addr);
-
-                    addr += 2;
-                    debug_print_kek(&curr_state, &token.name, true)
-                }
-
-                9 => {
-                    Tokenize::token_to_table(&mut file, &token.name, "Var", &addr);
-
-                    addr += 2;
-                    debug_print_kek(&curr_state, &token.name, true)
-                }
-
-                11 => {
+                0 => continue,
+                1 => {
                     Tokenize::token_to_table(&mut file, &token.name, "Literal", &addr);
 
                     addr += 2;
                     debug_print_kek(&curr_state, &token.name, true)
                 }
 
-                12 => {
-                    // End of program, quit out if still running through tokens for some reason
-                    break;
+                2 => {
+                    Tokenize::token_to_table(&mut file, &token.name, "Identifier", &addr);
+
+                    addr += 2;
+                    debug_print_kek(&curr_state, &token.name, true)
                 }
+
+                3 => break,
 
                 _ => panic!("[ ERROR ] Unreachable state, handle me better"),
             }
@@ -249,10 +232,10 @@ impl Tokenize {
 impl From<TokenClass> for usize {
     fn from(class: TokenClass) -> usize {
         match class {
-            TokenClass::Identifier | TokenClass::ReservedWord => 0,
-            TokenClass::Literal => 1,
-            TokenClass::Delimiter => 2,
-            TokenClass::Op => 3,
+            TokenClass::Literal => 0,
+            TokenClass::Identifier | TokenClass::ReservedWord => 1,
+            TokenClass::Op => 2,
+            TokenClass::Delimiter => 3,
             TokenClass::Unknown => panic!("[ Error ] Cannot index Unknown Token Class."),
             _ => panic!("[ Error ] Cannot index using Non-Terminal classes."),
         }
@@ -473,5 +456,16 @@ impl Iterator for Tokenize {
 
         // Send out token wrapped in option. Will return None to detonte end of Iter
         Some(token)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn sym_table() { 
+        let mut lex = Tokenize::create_scanner("test2.java").unwrap();
+        lex.create_symbol_table("symbols");
     }
 }

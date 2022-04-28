@@ -19,6 +19,8 @@ pub enum Terminal {
     Whitespace,
     Minus,
     Unknown,
+    OpenParan,
+    CloseParan,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -79,12 +81,14 @@ pub struct Tokenize {
     pub characters: Peekable<IntoIter<char>>,
 }
 
-const RESERVED_WORDS: [&str; 10] = [
+const RESERVED_WORDS: [&str; 12] = [
     "CONST",
     "IF",
     "VAR",
     "THEN",
     "PROCEDURE",
+    "GET",
+    "PUT",
     "WHILE",
     "CALL",
     "DO",
@@ -217,8 +221,8 @@ impl Tokenize {
             .expect("[ ERROR ] Something went wrong reading the file.");
 
         let file_reader = io::BufReader::new(table).lines().nth(state).unwrap();
-        if let Ok(goto) = file_reader {
-            return goto
+        if let Ok(line) = file_reader {
+            return line
                 .split(' ')
                 .collect::<Vec<&str>>()
                 .into_iter()
@@ -261,7 +265,9 @@ impl From<Terminal> for usize {
             Terminal::Slash => 9,
             Terminal::Whitespace => 10,
             Terminal::Minus => 11,
-            Terminal::Unknown => 12,
+            Terminal::OpenParan => 12,
+            Terminal::CloseParan => 13,
+            Terminal::Unknown => 999,
         }
     }
 }
@@ -284,6 +290,8 @@ impl From<&char> for Terminal {
             ',' => Terminal::Comma,
             '=' => Terminal::Equal,
             '-' => Terminal::Minus,
+            '(' => Terminal::OpenParan,
+            ')' => Terminal::CloseParan,
 
             _ => Terminal::Unknown,
         }
@@ -471,5 +479,13 @@ mod test {
     fn sym_table() {
         let mut lex = Tokenize::create_scanner("test2.java").unwrap();
         lex.create_symbol_table("symbols");
+    }
+
+    #[test]
+    fn lex_tokens() {
+        let mut lex = Tokenize::create_scanner("test5.java").unwrap();
+        while let Some(token) = lex.next() {
+            println!("{:?}", token);
+        }
     }
 }

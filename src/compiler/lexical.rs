@@ -160,7 +160,7 @@ impl Tokenize {
         while let Some(token) = self.next() {
             goto_state = Tokenize::table_lookup(
                 curr_state,
-                usize::from(token.class),
+                usize::from(token.class.clone()),
                 "fsa_tables/symbol_fsa",
             );
 
@@ -174,6 +174,9 @@ impl Tokenize {
                 }
 
                 2 => {
+                    if token.class == TokenClass::ReservedWord {
+                        continue;
+                    }
                     Tokenize::token_to_table(&mut file, &token.name, "Identifier", &addr);
 
                     addr += 2;
@@ -477,7 +480,7 @@ mod test {
 
     #[test]
     fn sym_table() {
-        let mut lex = Tokenize::create_scanner("test2.java").unwrap();
+        let mut lex = Tokenize::create_scanner("test5.java").unwrap();
         lex.create_symbol_table("symbols");
     }
 

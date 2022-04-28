@@ -187,7 +187,7 @@ impl Tokenize {
     fn token_to_table(mut file: &File, name: &str, class: &str, addr: &u32) {
         file.write_fmt(format_args!(
             "{:<6} {:<10} {:<5} {:<7} {}\n",
-            name, class, "", addr, "CS"
+            name, class, "", addr, "DS"
         ))
         .ok();
     }

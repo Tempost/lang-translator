@@ -1,6 +1,6 @@
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::vec::IntoIter;
 
@@ -29,17 +29,51 @@ impl Generator {
             fs::remove_file("code.asm").unwrap();
         }
 
-        let file = OpenOptions::new()
+        let mut file = OpenOptions::new()
             .create_new(true)
             .write(true)
             .open("code.asm")
             .unwrap();
 
         //Fill .data and .bss section with information from the symbol table
+        file.write_fmt(format_args!("section .data\n")).unwrap();
+        Generator::init_asm_file(&mut file).unwrap();
 
         Generator {
             quads: quads.into_iter(),
             asm_file: file,
+        }
+    }
+
+    fn init_asm_file(asm_file: &mut File) -> Result<()> {
+        // open symbol table
+        // init variables
+        // Table driven?
+        let sym_file = File::open("symbols");
+        match sym_file {
+            Ok(file) => {
+                let buf = BufReader::new(file);
+                let mut lines = buf.lines();
+
+                // skip header of the symbol table
+                lines.next();
+                while let Some(result) = lines.next() {
+                    let mut line_vec: Vec<&str>;
+                    if let Ok(line) = result {
+                        line_vec = Vec::from_iter(line.split_whitespace());
+                        if line_vec[1].eq("Identifier") {
+                            asm_file
+                                .write_fmt(format_args!("\t{:<5} DW 1\n", line_vec[0]))
+                                .unwrap();
+                        }
+                    }
+                }
+                asm_file
+                    .write_fmt(format_args!("section .bss\n\tglobal _start\nsection .text\n_start: nop\n"))
+                    .unwrap();
+                Ok(())
+            }
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -55,7 +89,7 @@ impl Generator {
                 TokenClass::Op => match quad.op.name.as_str() {
                     "+" => {
                         let res = self.asm_file.write_fmt(format_args!(
-                            "mov ax,[{}]\nadd ax,[{}]\nmov [{}],ax\n",
+                            "\tmov ax,[{}]\n\tadd ax,[{}]\n\tmov [{}],ax\n",
                             quad.param_two.name, quad.param_one.name, quad.temp.name
                         ));
 
@@ -66,7 +100,7 @@ impl Generator {
 
                     "-" => {
                         let res = self.asm_file.write_fmt(format_args!(
-                            "mov ax,[{}]\nsub ax,[{}]\nmov [{}],ax\n",
+                            "\tmov ax,[{}]\n\tsub ax,[{}]\n\tmov [{}],ax\n",
                             quad.param_two.name, quad.param_one.name, quad.temp.name
                         ));
 
@@ -77,7 +111,7 @@ impl Generator {
 
                     "/" => {
                         let res = self.asm_file.write_fmt(format_args!(
-                            "mov dx,0\nmov ax,[{}]\nmov bx,[{}]\ndiv bx\nmov [{}],ax\n",
+                            "\tmov dx,0\n\tmov ax,[{}]\n\tmov bx,[{}]\n\tdiv bx\n\tmov [{}],ax\n",
                             quad.param_two.name, quad.param_one.name, quad.temp.name
                         ));
 
@@ -88,7 +122,7 @@ impl Generator {
 
                     "*" => {
                         let res = self.asm_file.write_fmt(format_args!(
-                            "mov ax,[{}]\nmov bx,[{}]\nmul bx\nmov [{}],ax\n",
+                            "\tmov ax,[{}]\n\tmov bx,[{}]\n\tmul bx\n\tmov [{}],ax\n",
                             quad.param_two.name, quad.param_one.name, quad.temp.name
                         ));
 
@@ -99,7 +133,7 @@ impl Generator {
 
                     "=" => {
                         let res = self.asm_file.write_fmt(format_args!(
-                            "mov ax,[{}]\nmov [{}],ax\n",
+                            "\tmov ax,[{}]\n\tmov [{}],ax\n",
                             quad.param_one.name, quad.param_two.name
                         ));
 
@@ -159,5 +193,14 @@ mod test {
         let check_res = res.is_ok();
 
         assert!(check_res);
+    }
+
+    #[test]
+    fn init_vars() {
+        let mut syn = Syntax::new("test2.java", true);
+        syn.complete_analysis();
+        syn.consume_polish().unwrap();
+
+        let gen = Generator::new(syn.quads);
     }
 }

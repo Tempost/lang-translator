@@ -162,7 +162,16 @@ impl Syntax {
                         }
                     }
                     TokenClass::Delimiter => continue,
-                    TokenClass::ReservedWord => continue,
+                    TokenClass::ReservedWord => {
+                        if token.name.eq("GET") || token.name.eq("PUT") {
+                            quads.push(Quad {
+                                op: token.to_owned(),
+                                param_one: param_stack.pop().unwrap(),
+                                param_two: Token::empty(),
+                                temp: Token::empty(),
+                            });
+                        }
+                    },
                     _ => param_stack.push(token.to_owned()),
                 }
             } else {
@@ -404,7 +413,7 @@ impl Syntax {
                     self.op_stack.push(oper.clone());
                 }
 
-                Handle::Equal => todo!(),
+                Handle::Equal => continue,
             }
             self.factor();
             self.prev_op = oper;
@@ -424,7 +433,6 @@ impl Syntax {
 
 #[cfg(test)]
 mod test {
-
     use super::*;
 
     #[test]
@@ -443,9 +451,15 @@ mod test {
 
     #[test]
     fn syntax_test3() {
-        let mut syn = Syntax::new("test3.java", true);
+        let mut syn = Syntax::new("test5.java", true);
         syn.complete_analysis();
         syn.consume_polish().unwrap();
+
+        let mut iter = syn.quads.iter();
+
+        while let Some(quad) = iter.next() {
+            println!("{}", quad);
+        }
     }
 
     #[test]

@@ -1,5 +1,0 @@
-*,C,B,temp1
-/,D,temp1,temp2
-+,5,temp2,temp3
-+,temp3,A,temp4
-=,temp4,Ans,Empty

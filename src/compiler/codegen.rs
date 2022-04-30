@@ -85,7 +85,12 @@ impl Generator {
         // output the assembly to a file
         while let Some(quad) = self.quads.next() {
             match quad.op.class {
-                TokenClass::ReservedWord => todo!(),
+                TokenClass::ReservedWord => match quad.op.name.as_str() {
+                    "GET" => println!("Get {:?}", quad.param_one),
+                    "PUT" => println!("Put {:?}", quad.param_one),
+                    _ => todo!(),
+                }
+
                 TokenClass::Op => match quad.op.name.as_str() {
                     "+" => {
                         let res = self.asm_file.write_fmt(format_args!(
@@ -184,7 +189,7 @@ mod test {
 
     #[test]
     fn getting_data() {
-        let mut syn = Syntax::new("test2.java", true);
+        let mut syn = Syntax::new("test5.java", true);
         syn.complete_analysis();
         syn.consume_polish().unwrap();
 

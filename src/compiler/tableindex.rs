@@ -24,6 +24,8 @@ pub enum TableIndex {
     Const,
     Semi,
     Comma,
+    Get,
+    Put,
 }
 
 impl From<TableIndex> for usize {
@@ -53,6 +55,8 @@ impl From<TableIndex> for usize {
             TableIndex::Const => 21,
             TableIndex::Semi => 22,
             TableIndex::Comma => 23,
+            TableIndex::Get => 24,
+            TableIndex::Put => 25,
         }
     }
 }
@@ -81,6 +85,8 @@ impl From<&String> for TableIndex {
             "CLASS" => TableIndex::Class,
             "VAR" => TableIndex::Var,
             "CONST" => TableIndex::Const,
+            "GET" => TableIndex::Get,
+            "PUT" => TableIndex::Put,
             ";" => TableIndex::Semi,
             "," => TableIndex::Comma,
             _ => TableIndex::Nil,

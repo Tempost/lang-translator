@@ -410,16 +410,3 @@ impl Iterator for Tokenize {
         Some(token)
     }
 }
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn lex_tokens() {
-        let mut lex = Tokenize::create_scanner("test5.java").unwrap();
-        while let Some(token) = lex.next() {
-            println!("{:?}", token);
-        }
-    }
-}

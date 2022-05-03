@@ -35,9 +35,10 @@ impl Generator {
             .open("code.asm")
             .unwrap();
 
-        //Fill .data and .bss section with information from the symbol table
-        file.write_fmt(format_args!("\t.MODEL\n\t.STACK 200h\n\t.DATA\n"))
-            .unwrap();
+        file.write_fmt(format_args!(
+            "sys_exit equ 1\nsys_read equ 3\nsys_write equ 4\nstdin equ 0\nstdout equ 1\n.DATA\n"
+        ))
+        .unwrap();
         Generator::init_asm_file(&mut file).unwrap();
 
         Generator {
@@ -56,8 +57,6 @@ impl Generator {
                 let buf = BufReader::new(file);
                 let mut lines = buf.lines();
 
-                // skip header of the symbol table
-                lines.next();
                 while let Some(result) = lines.next() {
                     let mut line_vec: Vec<&str>;
                     if let Ok(line) = result {
@@ -71,7 +70,7 @@ impl Generator {
                 }
                 asm_file
                     .write_fmt(format_args!(
-                        "section .bss\n\tglobal _start\nsection .text\n_start: nop\n"
+                        "section .bss\n\tblen equ 6\n\tbuffer resb blen\nsection .text\n\tglobal _start\n_start: nop\n"
                     ))
                     .unwrap();
                 Ok(())
@@ -80,19 +79,34 @@ impl Generator {
         }
     }
 
-    fn consume_quads(&mut self) -> Result<()> {
+    pub fn consume_quads(&mut self) -> Result<()> {
         // let label_loc = 0;
         // let fix_up: Vec<(i32, &str)> = Vec::new();
 
         // Match on the different operators
         // output the assembly to a file
+        let mut io_flag = false;
         while let Some(quad) = self.quads.next() {
             match quad.op.class {
                 TokenClass::ReservedWord => match quad.op.name.as_str() {
                     "GET" => {
-                        let res = self.asm_file.write_fmt(format_args!("call GetInput"));
+                        io_flag = true;
+                        let res = self.asm_file.write_fmt(format_args!("call GetInput\n"));
+
+                        if res.is_err() {
+                            return Err(GeneratorErr(quad));
+                        }
                     }
-                    "PUT" => println!("Put {:?}", quad.param_one),
+
+                    "PUT" => {
+                        io_flag = true;
+                        let res = self.asm_file.write_fmt(format_args!("call Print\n"));
+
+                        if res.is_err() {
+                            return Err(GeneratorErr(quad));
+                        }
+                    }
+
                     _ => todo!(),
                 },
 
@@ -172,7 +186,21 @@ impl Generator {
             }
         }
 
+        if io_flag {
+            self.write_io();
+        }
+
         Ok(())
+    }
+
+    fn write_io(&mut self) {
+        self.asm_file
+            .write_fmt(format_args!(
+                "GetInput:\nmov eax, 3\nmov ebx, 2\nmov ecx, buffer\nmov edx, blen\nint 80h\n"
+            ))
+            .unwrap();
+
+        self.asm_file.write_fmt(format_args!("Print:\npush ax\npush dx\nmov eax, 4\nmov ebx, 1\nmov ecx")).unwrap();
     }
 }
 
@@ -180,22 +208,11 @@ impl Generator {
 mod test {
     use super::*;
     use crate::compiler::syntax::Syntax;
-    use std::any::type_name;
 
     #[test]
-    fn new_file() {
-        fn type_of<T>(_: T) -> &'static str {
-            type_name::<T>()
-        }
-
-        let file = File::open("code.asm").unwrap();
-        let gen = Generator::new(Vec::new());
-        assert_eq!(type_of(file), type_of(gen.asm_file));
-    }
-
-    #[test]
-    fn getting_data() {
-        let mut syn = Syntax::new("test5.java", true);
+    fn test_program1() {
+        let mut syn = Syntax::new("test1.java", true);
+        syn.create_symbol_table("symbols1");
         syn.complete_analysis();
         syn.consume_polish().unwrap();
 
@@ -207,12 +224,16 @@ mod test {
     }
 
     #[test]
-    fn init_vars() {
-        let mut syn = Syntax::new("test5.java", true);
-        syn.create_symbol_table("symbols");
+    fn test_program2() {
+        let mut syn = Syntax::new("test2.java", true);
+        syn.create_symbol_table("symbols2");
         syn.complete_analysis();
         syn.consume_polish().unwrap();
 
-        let gen = Generator::new(syn.quads);
+        let mut gen = Generator::new(syn.quads);
+        let res = gen.consume_quads();
+        let check_res = res.is_ok();
+
+        assert!(check_res);
     }
 }

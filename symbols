@@ -1,9 +1,0 @@
-Symbol Type       Value Address Segment
-Pgm1   $function        0       CS
-M      Constvar         0       CS
-N      Constvar         2       CS
-X      Var              4       CS
-Y      Var              6       CS
-Z      Var              8       CS
-97     Literal          10      CS
-18     Literal          12      CS

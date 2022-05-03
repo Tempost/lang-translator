@@ -98,6 +98,78 @@ impl Syntax {
         }
     }
 
+    pub fn token_to_table(name: &str, class: &str, value: &i32, addr: &u32) {
+        let mut file: File;
+        if !Path::new("symbols").exists() {
+            file = OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open("symbols")
+                .unwrap();
+        } else {
+            file = OpenOptions::new()
+                .append(true)
+                .write(true)
+                .open("symbols")
+                .unwrap();
+        }
+
+        file.write_fmt(format_args!(
+            "{:<6} {:<10} {:<5} {:<7} {}\n",
+            name, class, value, addr, "DS"
+        ))
+        .ok();
+    }
+
+    pub fn create_symbol_table(&mut self, filename: &str) {
+        // Make our token iterator peekable
+        let mut curr_state: usize = 0;
+        let mut goto_state: usize;
+        let value: i32 = 0;
+        let mut addr: u32 = 0;
+
+        let mut dis_token_iter = self.token_iter.clone();
+
+        while let Some(token) = dis_token_iter.next() {
+            // Skip delimiters completly
+            if token.class == TokenClass::Delimiter {
+                continue;
+            }
+
+            goto_state = Tokenize::table_lookup(
+                curr_state,
+                usize::from(token.class.clone()),
+                "fsa_tables/symbol_fsa",
+            );
+
+            match goto_state {
+                0 | 3 => {
+                    if token.name == "VAR" || token.name == "CONST" {
+                        continue;
+                    }
+                }
+                1 => {
+                    Syntax::token_to_table(&token.name, "Literal", &value, &addr);
+
+                    addr += 2;
+                }
+
+                2 => {
+                    if token.class == TokenClass::ReservedWord {
+                        continue;
+                    }
+                    Syntax::token_to_table(&token.name, "Identifier", &value, &addr);
+
+                    addr += 2;
+                }
+
+                _ => panic!("[ ERROR ] Unreachable state, handle me better"),
+            }
+
+            curr_state = goto_state;
+        }
+    }
+
     // Return a stack of iterable tokens
     pub fn tokens_from_memory(file: &str) -> Peekable<IntoIter<Token>> {
         let mut lex = Tokenize::create_scanner(file).unwrap();
@@ -171,7 +243,7 @@ impl Syntax {
                                 temp: Token::empty(),
                             });
                         }
-                    },
+                    }
                     _ => param_stack.push(token.to_owned()),
                 }
             } else {
@@ -443,8 +515,9 @@ mod test {
     }
 
     #[test]
-    fn syntax_test2() {
-        let mut syn = Syntax::new("test2.java", true);
+    fn sym_table() {
+        let mut syn = Syntax::new("test5.java", true);
+        syn.create_symbol_table("symbols");
         syn.complete_analysis();
         syn.consume_polish().unwrap();
     }

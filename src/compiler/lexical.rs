@@ -4,6 +4,8 @@ use std::iter::Peekable;
 use std::path::Path;
 use std::vec::IntoIter;
 
+use crate::compiler::syntax::Syntax;
+
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Terminal {
     Letter,
@@ -96,17 +98,6 @@ const RESERVED_WORDS: [&str; 12] = [
     "CLASS",
 ];
 
-fn debug_print_kek(curr_state: &usize, name: &str, flag: bool) {
-    let added: &str = if flag { "ADDED" } else { "" };
-
-    println!(
-        "State: {} Found: {} {}",
-        curr_state,
-        format_args!("{:<7}", name),
-        added
-    )
-}
-
 impl Token {
     pub fn empty() -> Self {
         Token {
@@ -124,10 +115,13 @@ impl Token {
 
     pub fn temp_gen(id: i32) -> Self {
         let string = String::from("temp") + &id.to_string();
-        Token {
+        let token = Token {
             name: string,
             class: TokenClass::Identifier,
-        }
+        };
+        Syntax::token_to_table(&token.name, "Temp", &0, &0);
+
+        token
     }
 }
 
@@ -139,64 +133,6 @@ impl Tokenize {
         Ok(Tokenize {
             characters: contents.chars().collect::<Vec<_>>().into_iter().peekable(),
         })
-    }
-
-    // NOTE: Unfinished symbol table construction
-    pub fn create_symbol_table(&mut self, filename: &str) {
-        let mut file =
-            fs::File::create(filename).expect("[ ERROR ] Something went wrong creating the file.");
-
-        // Make our token iterator peekable
-        let mut curr_state: usize = 0;
-        let mut goto_state: usize;
-        let mut addr: u32 = 0;
-
-        file.write_fmt(format_args!(
-            "{:<6} {:<10} {:<5} {:<7} {}\n",
-            "Symbol", "Type", "Value", "Address", "Segment"
-        ))
-        .ok();
-
-        while let Some(token) = self.next() {
-            goto_state = Tokenize::table_lookup(
-                curr_state,
-                usize::from(token.class.clone()),
-                "fsa_tables/symbol_fsa",
-            );
-
-            match goto_state {
-                0 => continue,
-                1 => {
-                    Tokenize::token_to_table(&mut file, &token.name, "Literal", &addr);
-
-                    addr += 2;
-                    debug_print_kek(&curr_state, &token.name, true)
-                }
-
-                2 => {
-                    if token.class == TokenClass::ReservedWord {
-                        continue;
-                    }
-                    Tokenize::token_to_table(&mut file, &token.name, "Identifier", &addr);
-
-                    addr += 2;
-                    debug_print_kek(&curr_state, &token.name, true)
-                }
-
-                3 => break,
-
-                _ => panic!("[ ERROR ] Unreachable state, handle me better"),
-            }
-            curr_state = goto_state;
-        }
-    }
-
-    fn token_to_table(mut file: &File, name: &str, class: &str, addr: &u32) {
-        file.write_fmt(format_args!(
-            "{:<6} {:<10} {:<5} {:<7} {}\n",
-            name, class, "", addr, "DS"
-        ))
-        .ok();
     }
 
     pub fn token_to_file(token: Token) {
@@ -219,14 +155,14 @@ impl Tokenize {
 
     // Using a predefined state table located in a file to perform row col look up
     // determining our current state
-    fn table_lookup(state: usize, col: usize, fsa: &str) -> usize {
+    pub fn table_lookup(state: usize, col: usize, fsa: &str) -> usize {
         let table = fs::File::open("src/compiler/".to_owned() + fsa)
             .expect("[ ERROR ] Something went wrong reading the file.");
 
         let file_reader = io::BufReader::new(table).lines().nth(state).unwrap();
         if let Ok(line) = file_reader {
             return line
-                .split(' ')
+                .split_whitespace()
                 .collect::<Vec<&str>>()
                 .into_iter()
                 .nth(col)
@@ -244,9 +180,10 @@ impl From<TokenClass> for usize {
     fn from(class: TokenClass) -> usize {
         match class {
             TokenClass::Literal => 0,
-            TokenClass::Identifier | TokenClass::ReservedWord => 1,
+            TokenClass::Identifier => 1,
             TokenClass::Op => 2,
             TokenClass::Delimiter => 3,
+            TokenClass::ReservedWord => 4,
             TokenClass::Unknown => panic!("[ Error ] Cannot index Unknown Token Class."),
             _ => panic!("[ Error ] Cannot index using Non-Terminal classes."),
         }
@@ -477,12 +414,6 @@ impl Iterator for Tokenize {
 #[cfg(test)]
 mod test {
     use super::*;
-
-    #[test]
-    fn sym_table() {
-        let mut lex = Tokenize::create_scanner("test5.java").unwrap();
-        lex.create_symbol_table("symbols");
-    }
 
     #[test]
     fn lex_tokens() {

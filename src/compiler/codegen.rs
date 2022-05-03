@@ -36,7 +36,8 @@ impl Generator {
             .unwrap();
 
         //Fill .data and .bss section with information from the symbol table
-        file.write_fmt(format_args!("section .data\n")).unwrap();
+        file.write_fmt(format_args!("\t.MODEL\n\t.STACK 200h\n\t.DATA\n"))
+            .unwrap();
         Generator::init_asm_file(&mut file).unwrap();
 
         Generator {
@@ -63,13 +64,15 @@ impl Generator {
                         line_vec = Vec::from_iter(line.split_whitespace());
                         if line_vec[1].eq("Identifier") {
                             asm_file
-                                .write_fmt(format_args!("\t{:<5} DW 1\n", line_vec[0]))
+                                .write_fmt(format_args!("{:<5} DW {}\n", line_vec[0], line_vec[2]))
                                 .unwrap();
                         }
                     }
                 }
                 asm_file
-                    .write_fmt(format_args!("section .bss\n\tglobal _start\nsection .text\n_start: nop\n"))
+                    .write_fmt(format_args!(
+                        "section .bss\n\tglobal _start\nsection .text\n_start: nop\n"
+                    ))
                     .unwrap();
                 Ok(())
             }
@@ -86,10 +89,12 @@ impl Generator {
         while let Some(quad) = self.quads.next() {
             match quad.op.class {
                 TokenClass::ReservedWord => match quad.op.name.as_str() {
-                    "GET" => println!("Get {:?}", quad.param_one),
+                    "GET" => {
+                        let res = self.asm_file.write_fmt(format_args!("call GetInput"));
+                    }
                     "PUT" => println!("Put {:?}", quad.param_one),
                     _ => todo!(),
-                }
+                },
 
                 TokenClass::Op => match quad.op.name.as_str() {
                     "+" => {
@@ -161,6 +166,7 @@ impl Generator {
                     if Path::new("code.asm").exists() {
                         fs::remove_file("code.asm").unwrap();
                     }
+
                     panic!("[ Error ] Some how this made it past syntax analysis?")
                 }
             }
@@ -202,7 +208,8 @@ mod test {
 
     #[test]
     fn init_vars() {
-        let mut syn = Syntax::new("test2.java", true);
+        let mut syn = Syntax::new("test5.java", true);
+        syn.create_symbol_table("symbols");
         syn.complete_analysis();
         syn.consume_polish().unwrap();
 
